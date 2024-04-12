@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "export NODE_OPTIONS=--openssl-legacy-provider && next dev -p 3002",
-    "build": "next build",
-    "start": "next start -p 3002"
+    "dev": "export NODE_OPTIONS=--openssl-legacy-provider && next dev -p 3001",
+    "build": "export NODE_OPTIONS=--openssl-legacy-provider && next build",
+    "start": "export NODE_OPTIONS=--openssl-legacy-provider && next start -p 3001"
   },
   "dependencies": {
     "@fontsource/open-sans": "^4.5.1",
@@ -43,6 +43,7 @@
     "react-scroll": "^1.8.4",
     "react-select": "^5.0.0",
     "react-toastify": "^8.0.3",
+    "sharp": "^0.33.3",
     "yup": "^0.32.9"
   },
   "devDependencies": {
