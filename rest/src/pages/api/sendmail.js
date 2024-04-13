@@ -1,5 +1,6 @@
 import axios from "axios";
 import { PrismaClient } from "@prisma/client";
+import logToFile from "@utils/logger";
 
 const prisma = new PrismaClient();
 
@@ -10,6 +11,8 @@ async function sendEmail(templateVariables) {
     const emailSupportName = process.env.EMAIL_SUPPORT_NAME;
     const mailtrapApiKey = process.env.MAILTRAP_API_KEY;
     const templateUuid = process.env.TEMPLATE_UUID;
+
+    logToFile(`emailSupport to ${emailSupport}`);
 
     console.log(templateUuid)
     
@@ -109,6 +112,8 @@ export default async function handler(req, res) {
             },
           })),
         };
+
+        logToFile(`templateVariables ${templateVariables.shipping_email}`);
         console.log(templateVariables);
 
         if (templateVariables.shipping_email === "changha8888@gmail.com") {
