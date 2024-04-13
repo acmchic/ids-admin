@@ -10,6 +10,8 @@ async function sendEmail(templateVariables) {
     const emailSupportName = process.env.EMAIL_SUPPORT_NAME;
     const mailtrapApiKey = process.env.MAILTRAP_API_KEY;
     const templateUuid = process.env.TEMPLATE_UUID;
+
+    console.log(templateUuid)
     
     const data = {
       from: {
@@ -45,8 +47,6 @@ async function sendEmail(templateVariables) {
 }
 
 export default async function handler(req, res) {
-  console.log(1)
-  return;
   try {
     const orders = await prisma.$queryRaw`
       SELECT
@@ -109,6 +109,7 @@ export default async function handler(req, res) {
             },
           })),
         };
+        console.log(templateVariables);
 
         if (templateVariables.shipping_email === "changha8888@gmail.com") {
           continue;
