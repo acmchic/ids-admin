@@ -2,13 +2,21 @@ import sharp from "sharp";
 import axios from "axios";
 import fs from "fs";
 import path from "path";
+import cors from 'cors';
+
+const corsOptions = {
+  origin: 'https://order.idreamshirt.com',
+};
 
 export default async function handler(req, res) {
   const { imageUrl, width, height } = req.body;
   const imageName = imageUrl.substring(imageUrl.lastIndexOf('/') + 1);
-  const outputImagePath = path.resolve(__dirname, '../../../../../../api/public/images/atwork/', imageName);
+  const outputImagePath = path.join('/home/debian/order/images/atwork/', imageName);
 
   try {
+    // Sử dụng middleware CORS
+    await cors(corsOptions)(req, res);
+
     const response = await axios.get(imageUrl, { responseType: "arraybuffer" });
     fs.writeFileSync(imageName, response.data);
     console.log(`Downloaded image: ${imageName}`);
