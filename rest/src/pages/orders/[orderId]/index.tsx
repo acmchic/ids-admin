@@ -24,6 +24,7 @@ import { useIsRTL } from "@utils/locals";
 type FormValues = {
 	order_status: any;
 };
+
 export default function OrderDetailsPage() {
 	const { t } = useTranslation();
 	const { query } = useRouter();
@@ -36,12 +37,10 @@ export default function OrderDetailsPage() {
 		isLoading: loading,
 		error,
 	} = useOrderQuery(query.orderId as string);
-	console.log(data)
 
 	const {
 		handleSubmit,
 		control,
-
 		formState: { errors },
 	} = useForm<FormValues>({
 		defaultValues: { order_status: data?.order?.status?.id ?? "" },
@@ -57,6 +56,7 @@ export default function OrderDetailsPage() {
 			},
 		});
 	};
+
 	const { price: subtotal } = usePrice(
 		data && {
 			amount: data?.order?.amount!,
@@ -82,20 +82,23 @@ export default function OrderDetailsPage() {
 			amount: data?.order?.sales_tax!,
 		}
 	);
+
 	if (loading) return <Loader text={t("common:text-loading")} />;
 	if (error) return <ErrorMessage message={error.message} />;
+	console.log(data?.order?.products);
+	
 
 	const columns = [
 		{
-			dataIndex: "image",
-			key: "image",
+			dataIndex: "pivot.img_url",
+			key: "pivot.img_url",
 			width: 70,
-			render: (image: Attachment) => (
+			render: (_: any, item: any) => (
 				<Image
-					src={process.env.NEXT_PUBLIC_REST_API_ENDPOINT + '/images/' + (image?.original ?? siteSettings.product.placeholder)}
+					src={item.pivot.img_url ?? siteSettings.product.placeholder}
 					layout="fixed"
-					width={100}
-					height={100}
+					width={150}
+					height={150}
 				/>
 			),
 		},
@@ -104,16 +107,27 @@ export default function OrderDetailsPage() {
 			dataIndex: "name",
 			key: "name",
 			align: alignLeft,
-			render: (name: string, item: any) => (
-				<div>
-					<span>{name}</span>
-					<span className="mx-2">x</span>
-					<span className="font-semibold text-heading">
-						{item.pivot.order_quantity}
-					</span>
-				</div>
-			),
+			render: (name: string, item: any) => {
+				const variation = JSON.parse(item.pivot.variation);
+				return (
+					<div>
+						<span>{name}</span>
+						<span className="mx-2">x</span>
+						<span className="font-semibold text-heading">
+							{item.pivot.order_quantity}
+						</span>
+						<div>
+							<span>Size: {variation.size}</span>
+							<span className="mx-2">|</span>
+							<span>Color: {variation.color}</span>
+							<span className="mx-2">|</span>
+							<span>Side: {variation.side}</span>
+						</div>
+					</div>
+				);
+			},
 		},
+		
 		{
 			title: t("table:table-item-total"),
 			dataIndex: "price",
@@ -243,6 +257,7 @@ export default function OrderDetailsPage() {
 		</Card>
 	);
 }
+
 OrderDetailsPage.Layout = Layout;
 
 export const getServerSideProps = async ({ locale }: any) => ({

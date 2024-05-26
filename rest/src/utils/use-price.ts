@@ -53,9 +53,6 @@ export default function usePrice(data?: PriceProps | null) {
   const { amount = 0, baseAmount = 0, currencyCode = currency } = data ?? {};
   const locale = 'en';
 
-  console.log("Debug: amount", amount);
-  console.log("Debug: baseAmount", baseAmount);
-  console.log("Debug: currencyCode", currencyCode);
 
   const value = useMemo(() => {
     if (typeof amount !== "number" || !currencyCode) {
@@ -68,7 +65,6 @@ export default function usePrice(data?: PriceProps | null) {
       : formatPrice({ amount, currencyCode, locale });
   }, [amount, baseAmount, currencyCode, locale]);
 
-  console.log("Debug: value", value);
 
   return typeof value === "string"
     ? { price: value, basePrice: null, discount: null }

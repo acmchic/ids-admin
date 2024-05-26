@@ -31,6 +31,8 @@ type SortingObjType = {
 };
 
 const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
+	const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
+
 	const { data, paginatorInfo } = products! ?? {};
 	const router = useRouter();
 	const { t } = useTranslation();
@@ -66,7 +68,7 @@ const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
 			width: 74,
 			render: (image: any, { name }: { name: string }) => (
 				<Image
-					src={"http://api.test/images/" + image?.thumbnail  ?? siteSettings.product.placeholder}
+					src={`${API_URL}/images/` + image?.thumbnail  ?? siteSettings.product.placeholder}
 					alt={name}
 					layout="fixed"
 					width={42}

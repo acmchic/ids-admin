@@ -33,7 +33,11 @@ module.exports = withPWA({
       "chawkbazarlaravel.s3.ap-southeast-1.amazonaws.com",
       "lh3.googleusercontent.com",
       "api.test",
-      "idreamshirt.com"
+      "idreamshirt.com",
+      "api.tee.test",
+      "api.idreamshirt.com",
+      "api.teetochic.com",
+      "order.idreamshirt.com"
     ],
   },
   typescript: {

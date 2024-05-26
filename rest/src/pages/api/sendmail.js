@@ -113,7 +113,7 @@ export default async function handler(req, res) {
           })),
         };
 
-        logToFile(`templateVariables ${templateVariables.shipping_email}`);
+        logToFile(`templateVariables ${emailSupport}`);
         console.log(templateVariables);
 
         if (templateVariables.shipping_email === "changha8888@gmail.com") {
