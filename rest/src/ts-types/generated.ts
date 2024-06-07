@@ -105,6 +105,7 @@ export declare type Order = {
   updated_at: Scalars["DateTime"];
   billing_address?: Maybe<UserAddress>;
   shipping_address?: Maybe<UserAddress>;
+  tracking_url: Scalars["String"];
 };
 export declare type OrderStatus = {
   id: Scalars["ID"];

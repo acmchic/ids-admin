@@ -30,12 +30,12 @@ const RecentOrders = ({ orders, title }: IProps) => {
 			dataIndex: "total",
 			key: "total",
 			align: "center",
-			render: (value: any) => {
-				const { price } = usePrice({
-					amount: value,
-				});
-				return <span className="whitespace-nowrap">{price}</span>;
-			},
+			// render: (value: any) => {
+			// 	// const { price } = usePrice({
+			// 	// 	amount: value,
+			// 	// });
+			// 	return <span className="whitespace-nowrap">{price}</span>;
+			// },
 		},
 		{
 			title: t("table:table-item-order-date"),

@@ -21,6 +21,7 @@ import { useTranslation } from "next-i18next";
 import { useIsRTL } from "@utils/locals";
 import { useState } from "react";
 import TitleWithSort from "@components/ui/title-with-sort";
+import Link from "@components/ui/link";
 
 type IProps = {
 	orders: OrderPaginator | null | undefined;
@@ -62,24 +63,26 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 	const columns = [
 		{
 			title: t("table:table-item-tracking-number"),
-			dataIndex: "tracking_number",
-			key: "tracking_number",
-			align: "center",
+			dataIndex: "order_mapping",
+			key: "order_mapping",
 			width: 150,
+			render: (order_mapping: string, record: Order) => {
+				if (record.tracking_url) {
+					return (
+						<Link
+							href={record.tracking_url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="text-blue-500 hover:underline"
+						>
+							{order_mapping}
+						</Link>
+					);
+				}
+				return <>{order_mapping}</>;
+			},
 		},
-		{
-			title: t("table:table-item-delivery-fee"),
-			dataIndex: "delivery_fee",
-			key: "delivery_fee",
-			align: "center",
-			// render: (value: any) => {
-			// 	const delivery_fee = value ? value : 0;
-			// 	const { price } = usePrice({
-			// 		amount: delivery_fee,
-			// 	});
-			// 	return <span>{price}</span>;
-			// },
-		},
+		
 		{
 			title: (
 				<TitleWithSort

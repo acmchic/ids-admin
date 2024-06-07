@@ -93,7 +93,7 @@ export default function Dashboard() {
         </div>
         <div className="w-full ">
           <StickerCard
-            titleTransKey="sticker-card-title-total-shops"
+            titleTransKey="Not Pay"
             icon={<ShopIcon className="w-6" color="#1D4ED8" />}
             iconBgStyle={{ backgroundColor: "#93C5FD" }}
             price={data?.totalShops}
