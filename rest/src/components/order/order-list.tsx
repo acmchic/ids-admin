@@ -173,10 +173,24 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 			dataIndex: "shipping_address",
 			key: "shipping_address",
 			align: alignLeft,
-			render: (shipping_address: UserAddress) => (
-				<div>{formatAddress(shipping_address)}</div>
-			),
-		},
+			render: (shipping_address: UserAddress) => {
+			  // Format the address for Google Maps
+			  const formattedAddress = `${shipping_address.street}, ${shipping_address.city}, ${shipping_address.state} ${shipping_address.zip}, ${shipping_address.country}`;
+			  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`;
+			  
+			  return (
+				<Link
+				  href={googleMapsUrl} 
+				  target="_blank" 
+				  rel="noopener noreferrer" 
+				  className="text-blue-500 hover:underline"
+				>
+				  {formatAddress(shipping_address)}
+				</Link>
+			  );
+			},
+		  },
+		  
 		{
 			// title: "Download",
 			title: t("common:text-invoice"),
