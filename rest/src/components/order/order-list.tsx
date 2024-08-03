@@ -65,7 +65,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 		  title: t("table:table-item-tracking-number"),
 		  dataIndex: "order_mapping",
 		  key: "order_mapping",
-		  width: 150,
+		  width: 250,
 		  render: (order_mapping: string, record: Order) => {
 			if (record.tracking_url) {
 			  try {
