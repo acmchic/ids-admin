@@ -62,25 +62,36 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
 	const columns = [
 		{
-			title: t("table:table-item-tracking-number"),
-			dataIndex: "order_mapping",
-			key: "order_mapping",
-			width: 150,
-			render: (order_mapping: string, record: Order) => {
-				if (record.tracking_url) {
-					return (
-						<Link
-							href={record.tracking_url}
-							target="_blank"
-							rel="noopener noreferrer"
-							className="text-blue-500 hover:underline"
-						>
-							{order_mapping}
-						</Link>
-					);
-				}
+		  title: t("table:table-item-tracking-number"),
+		  dataIndex: "order_mapping",
+		  key: "order_mapping",
+		  width: 150,
+		  render: (order_mapping: string, record: Order) => {
+			if (record.tracking_url) {
+			  try {
+				// Parse the URL to extract the tracknum parameter
+				const url = new URL(record.tracking_url);
+				const tracknum = url.searchParams.get("tracknum");
+				
+				// If tracknum is found, display it; otherwise, display the order_mapping
+				return (
+				  <Link
+					href={record.tracking_url}
+					target="_blank"
+					rel="noopener noreferrer"
+					className="text-blue-500 hover:underline"
+				  >
+					{tracknum || order_mapping}
+				  </Link>
+				);
+			  } catch (error) {
+				// Handle any errors that occur during URL parsing
+				console.error("Invalid tracking URL:", error);
 				return <>{order_mapping}</>;
-			},
+			  }
+			}
+			return <>{order_mapping}</>;
+		  },
 		},
 		
 		{
