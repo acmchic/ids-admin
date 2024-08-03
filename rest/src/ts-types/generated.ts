@@ -35,6 +35,13 @@ export declare type UserAddress = {
   zip?: Maybe<Scalars["String"]>;
   street_address?: Maybe<Scalars["String"]>;
 };
+export declare type UserAddress1 = {
+  country?: Maybe<Scalars["String"]>;
+  shipping_city?: Maybe<Scalars["String"]>;
+  shipping_province_code?: any;
+  shipping_zipcode?: Maybe<Scalars["String"]>;
+  shipping_address1?: Maybe<Scalars["String"]>;
+};
 export declare type User = {
   id: Scalars["ID"];
   name: Scalars["String"];

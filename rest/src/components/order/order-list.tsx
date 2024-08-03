@@ -13,6 +13,7 @@ import {
 	OrderStatus,
 	SortOrder,
 	UserAddress,
+	UserAddress1,
 } from "@ts-types/generated";
 import InvoicePdf from "./invoice-pdf";
 import { PDFDownloadLink } from "@react-pdf/renderer";
@@ -173,33 +174,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 			dataIndex: "shipping_address",
 			key: "shipping_address",
 			align: alignLeft,
-			render: (shipping_address: UserAddress) => {
-			  if (!shipping_address) {
-				return <span>{t("common:text-not-available")}</span>;
-			  }
-		  
-			  // Destructure address fields from shipping_address
-			  const { street, city, state, zip, country } = shipping_address;
-		  
+			render: (shipping_address: UserAddress1) => {
 			  // Format the address for Google Maps
-			  const formattedAddress = [street, city, state, zip, country]
-				.filter(part => part) // Remove any undefined or empty parts
-				.join(', ');
+			  const formattedAddress = `${shipping_address.shipping_address1}, ${shipping_address.shipping_city}, ${shipping_address.shipping_province_code?.label} ${shipping_address.shipping_zipcode}, US}`;
 			  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`;
-		  
+			  
 			  return (
-				<Link 
+				<Link
 				  href={googleMapsUrl} 
 				  target="_blank" 
 				  rel="noopener noreferrer" 
 				  className="text-blue-500 hover:underline"
 				>
-				  {formattedAddress}
+				  {formatAddress(shipping_address)}
 				</Link>
 			  );
 			},
 		  },
-		  
 		  
 		{
 			// title: "Download",
