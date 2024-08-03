@@ -174,22 +174,32 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 			key: "shipping_address",
 			align: alignLeft,
 			render: (shipping_address: UserAddress) => {
+			  if (!shipping_address) {
+				return <span>{t("common:text-not-available")}</span>;
+			  }
+		  
+			  // Destructure address fields from shipping_address
+			  const { street, city, state, zip, country } = shipping_address;
+		  
 			  // Format the address for Google Maps
-			  const formattedAddress = `${shipping_address.street}, ${shipping_address.city}, ${shipping_address.state} ${shipping_address.zip}, ${shipping_address.country}`;
+			  const formattedAddress = [street, city, state, zip, country]
+				.filter(part => part) // Remove any undefined or empty parts
+				.join(', ');
 			  const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(formattedAddress)}`;
-			  
+		  
 			  return (
-				<Link
+				<Link 
 				  href={googleMapsUrl} 
 				  target="_blank" 
 				  rel="noopener noreferrer" 
 				  className="text-blue-500 hover:underline"
 				>
-				  {formatAddress(shipping_address)}
+				  {formattedAddress}
 				</Link>
 			  );
 			},
-		  },
+		  }
+		  
 		  
 		{
 			// title: "Download",
