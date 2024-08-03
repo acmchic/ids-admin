@@ -198,7 +198,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 				</Link>
 			  );
 			},
-		  }
+		  },
 		  
 		  
 		{
