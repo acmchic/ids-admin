@@ -66,7 +66,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       title: t("table:table-item-tracking-number"),
       dataIndex: "order_mapping",
       key: "order_mapping",
-      width: 250,
+      width: 40,
       render: (order_mapping: string, record: Order) => {
 		if (record.tracking_url) {
 		  try {
@@ -209,8 +209,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     {
       // title: "Download",
       title: t("common:text-invoice"),
-      dataIndex: "id",
-      key: "download",
+	  dataIndex: "shipping_address",
+      key: "shipping_address",
       align: "center",
     //   render: (_id: string, order: Order) => (
     //     <div className="block">
@@ -230,7 +230,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
    
         const formattedAddress = [name]
           .filter((part) => part)
-          .join(", ");
+          .join("");
 
         return (
           <span>
