@@ -68,31 +68,31 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       key: "order_mapping",
       width: 250,
       render: (order_mapping: string, record: Order) => {
-        if (record.tracking_url) {
-          try {
-            // Parse the URL to extract the tracknum parameter
-            const url = new URL(record.tracking_url);
-            const tracknum = url.searchParams.get("tracknum");
-
-            // If tracknum is found, display it; otherwise, display the order_mapping
-            return (
-              <Link
-                href={record.tracking_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-blue-500 hover:underline"
-              >
-                {tracknum || order_mapping}
-              </Link>
-            );
-          } catch (error) {
-            // Handle any errors that occur during URL parsing
-            console.error("Invalid tracking URL:", error);
-            return <>{order_mapping}</>;
-          }
-        }
-        return <>{order_mapping}</>;
-      },
+		if (record.tracking_url) {
+		  try {
+			const url = new URL(record.tracking_url);
+			const tracknum = url.searchParams.get("tracknum");
+	  
+			const lastFourDigits = (tracknum || order_mapping).slice(-4);
+	  
+			return (
+			  <Link
+				href={record.tracking_url}
+				target="_blank"
+				rel="noopener noreferrer"
+				className="text-blue-500 hover:underline"
+			  >
+				{lastFourDigits}
+			  </Link>
+			);
+		  } catch (error) {
+			console.error("Invalid tracking URL:", error);
+			return <>{order_mapping.slice(-4)}</>;
+		  }
+		}
+		return <>{order_mapping.slice(-4)}</>;
+	  }
+	  
     },
 
     {
@@ -210,19 +210,36 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "id",
       key: "download",
       align: "center",
-      render: (_id: string, order: Order) => (
-        <div className="block">
-          <PDFDownloadLink
-            document={<InvoicePdf order={order} />}
-            fileName="invoice.pdf"
-            className="break-normal"
+    //   render: (_id: string, order: Order) => (
+    //     <div className="block">
+    //       <PDFDownloadLink
+    //         document={<InvoicePdf order={order} />}
+    //         fileName="invoice.pdf"
+    //         className="break-normal"
+    //       >
+    //         {({ loading }: any) =>
+    //           loading ? t("common:text-loading") : t("common:text-download")
+    //         }
+    //       </PDFDownloadLink>
+    //     </div>
+    //   ),
+	render: (shipping_address: UserAddress1) => {
+        const name = shipping_address.shipping_name || "";
+   
+        const formattedAddress = [name]
+          .filter((part) => part)
+          .join(", ");
+
+        return (
+          <Link
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-500 hover:underline"
           >
-            {({ loading }: any) =>
-              loading ? t("common:text-loading") : t("common:text-download")
-            }
-          </PDFDownloadLink>
-        </div>
-      ),
+            {formattedAddress}
+          </Link>
+        );
+      },
     },
     {
       title: t("table:table-item-actions"),
