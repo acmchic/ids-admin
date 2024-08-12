@@ -73,7 +73,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 			const url = new URL(record.tracking_url);
 			const tracknum = url.searchParams.get("tracknum");
 	  
-			const lastFourDigits = (tracknum || order_mapping).slice(-4);
+			const lastFourDigits = (tracknum || order_mapping || "").slice(-4);
 	  
 			return (
 			  <Link
@@ -87,11 +87,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 			);
 		  } catch (error) {
 			console.error("Invalid tracking URL:", error);
-			return <>{order_mapping.slice(-4)}</>;
+			return <>{(order_mapping || "").slice(-4)}</>;
 		  }
 		}
-		return <>{order_mapping.slice(-4)}</>;
+	  
+		return <>{(order_mapping || "").slice(-4)}</>;
 	  }
+	  
 	  
     },
 
