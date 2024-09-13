@@ -9,7 +9,7 @@ import { useOrdersQuery } from "@data/order/use-orders.query";
 import { useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { SortOrder } from "@ts-types/generated";
-import {adminOnly} from "@utils/auth-utils";
+import { adminOnly } from "@utils/auth-utils";
 
 export default function Orders() {
   const [searchTerm, setSearchTerm] = useState("");
@@ -26,16 +26,22 @@ export default function Orders() {
     limit: 20,
     page,
     text: searchTerm,
+    orderBy,    // Thay đổi để sắp xếp theo orderBy
+    sortedBy,   // Thay đổi để sắp xếp theo sortedBy
   });
+
   if (loading) return <Loader text={t("common:text-loading")} />;
   if (error) return <ErrorMessage message={error.message} />;
+
   function handleSearch({ searchText }: { searchText: string }) {
     setSearchTerm(searchText);
     setPage(1);
   }
+
   function handlePagination(current: any) {
     setPage(current);
   }
+
   return (
     <>
       <Card className="flex flex-col md:flex-row items-center justify-between mb-8">
@@ -53,8 +59,8 @@ export default function Orders() {
       <OrderList
         orders={data?.orders}
         onPagination={handlePagination}
-        onOrder={setOrder}
-        onSort={setColumn}
+        onOrder={setOrder}  // Đảm bảo rằng chỉ sử dụng "created_at"
+        onSort={setColumn}  // Thay đổi cột sắp xếp
       />
     </>
   );
