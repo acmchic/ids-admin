@@ -4,7 +4,7 @@ pm2 delete admin
 
 npm install
 
-rm -rf .next
+rm -rf .next/
 
 npm run build
 
