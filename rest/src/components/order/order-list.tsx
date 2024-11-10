@@ -2,8 +2,6 @@ import Pagination from "@components/ui/pagination";
 import dayjs from "dayjs";
 import { Table } from "@components/ui/table";
 import ActionButtons from "@components/common/action-buttons";
-import usePrice from "@utils/use-price";
-import { formatAddress } from "@utils/format-address";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
@@ -12,17 +10,16 @@ import {
   OrderPaginator,
   OrderStatus,
   SortOrder,
-  UserAddress,
   UserAddress1,
 } from "@ts-types/generated";
-import InvoicePdf from "./invoice-pdf";
-import { PDFDownloadLink } from "@react-pdf/renderer";
+
 import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import { useIsRTL } from "@utils/locals";
 import { useState } from "react";
 import TitleWithSort from "@components/ui/title-with-sort";
 import Link from "@components/ui/link";
+import Image from "next/dist/client/image";
 
 type IProps = {
   orders: OrderPaginator | null | undefined;
@@ -37,6 +34,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   const rowExpandable = (record: any) => record.children?.length;
   const router = useRouter();
   const { alignLeft } = useIsRTL();
+  console.log(data);
 
   const [sortingObj, setSortingObj] = useState<{
     sort: SortOrder;
@@ -63,39 +61,81 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
   const columns = [
     {
-      title: t("table:table-item-tracking-number"),
-      dataIndex: "order_mapping",
-      key: "order_mapping",
-      width: 40,
-      render: (order_mapping: string, record: Order) => {
-		if (record.tracking_url) {
-		  try {
-			const url = new URL(record.tracking_url);
-			const tracknum = url.searchParams.get("tracknum");
-	  
-			const lastFourDigits = (tracknum || order_mapping || "").slice(-4);
-	  
-			return (
-			  <Link
-				href={record.tracking_url}
-				target="_blank"
-				rel="noopener noreferrer"
-				className="text-blue-500 hover:underline"
-			  >
-				{lastFourDigits}
-			  </Link>
-			);
-		  } catch (error) {
-			console.error("Invalid tracking URL:", error);
-			return <>{(order_mapping || "").slice(-4)}</>;
-		  }
-		}
-	  
-		return <>{(order_mapping || "").slice(-4)}</>;
-	  }
-	  
-	  
+      title: "Name",
+      dataIndex: "products",
+      key: "products",
+      align: "center",
+      width: 200,
+      render: (products: any[]) => (
+        <div className="flex flex-col gap-2">
+          {products.map((product) => (
+            <div key={product.id} className="mb-2 text-center">
+              <p className="mt-1 text-sm">
+                {product.name.length > 20
+                  ? `${product.name.slice(0, 20)}...`
+                  : product.name}
+              </p>
+            </div>
+          ))}
+        </div>
+      ),
     },
+    {
+      title: "Image",
+      dataIndex: "products",
+      key: "products",
+      align: "center",
+      width: 100,
+      render: (products: any[]) => (
+        <div className="flex flex-col">
+          {products.map((product) => (
+            <div key={product.id} className="mb-2 text-center">
+              <Image
+                src={product.pivot.img_url}
+                alt={product.name}
+                width={70} // Adjust width
+                height={70} // Adjust height
+                className="rounded-md"
+              />
+            </div>
+          ))}
+        </div>
+      ),
+    },
+
+    // {
+    //   title: t("table:table-item-tracking-number"),
+    //   dataIndex: "order_mapping",
+    //   key: "order_mapping",
+    //   width: 40,
+    //   render: (order_mapping: string, record: Order) => {
+    // if (record.tracking_url) {
+    //   try {
+    // 	const url = new URL(record.tracking_url);
+    // 	const tracknum = url.searchParams.get("tracknum");
+
+    // 	const lastFourDigits = (tracknum || order_mapping || "").slice(-4);
+
+    // 	return (
+    // 	  <Link
+    // 		href={record.tracking_url}
+    // 		target="_blank"
+    // 		rel="noopener noreferrer"
+    // 		className="text-blue-500 hover:underline"
+    // 	  >
+    // 		{lastFourDigits}
+    // 	  </Link>
+    // 	);
+    //   } catch (error) {
+    // 	console.error("Invalid tracking URL:", error);
+    // 	return <>{(order_mapping || "").slice(-4)}</>;
+    //   }
+    // }
+
+    // return <>{(order_mapping || "").slice(-4)}</>;
+    // }
+
+    // },
 
     {
       title: (
@@ -113,12 +153,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       align: "center",
       width: 120,
       onHeaderCell: () => onHeaderClick("total"),
-      // render: (value: any) => {
-      // 	const { price } = usePrice({
-      // 		amount: value,
-      // 	});
-      // 	return <span className="whitespace-nowrap">{price}</span>;
-      // },
     },
     {
       title: (
@@ -162,15 +196,24 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       key: "status",
       align: alignLeft,
       onHeaderCell: () => onHeaderClick("status"),
-      render: (status: OrderStatus) => (
-        <span
-          className="whitespace-nowrap font-semibold"
-          style={{ color: status?.color! }}
-        >
-          {status?.name}
-        </span>
-      ),
+      render: (status: OrderStatus) => {
+        let additionalText = ""; // Define additional text based on status.id
+
+        if (status?.id === 2) additionalText = "(G)";
+        else if (status?.id === 9) additionalText = "(Burgerprint)";
+        else if (status?.id === 8) additionalText = "(Printway)";
+
+        return (
+          <span
+            className="whitespace-nowrap font-semibold"
+            style={{ color: status?.color }}
+          >
+            {status?.name} {additionalText}
+          </span>
+        );
+      },
     },
+
     {
       title: t("table:table-item-shipping-address"),
       dataIndex: "shipping_address",
@@ -207,36 +250,17 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     },
 
     {
-      // title: "Download",
       title: t("common:text-invoice"),
-	  dataIndex: "shipping_address",
+      dataIndex: "shipping_address",
       key: "shipping_address",
       align: "center",
-    //   render: (_id: string, order: Order) => (
-    //     <div className="block">
-    //       <PDFDownloadLink
-    //         document={<InvoicePdf order={order} />}
-    //         fileName="invoice.pdf"
-    //         className="break-normal"
-    //       >
-    //         {({ loading }: any) =>
-    //           loading ? t("common:text-loading") : t("common:text-download")
-    //         }
-    //       </PDFDownloadLink>
-    //     </div>
-    //   ),
-	render: (shipping_address: UserAddress1) => {
-        const name = shipping_address.shipping_name || "";
-   
-        const formattedAddress = [name]
-          .filter((part) => part)
-          .join("");
 
-        return (
-          <span>
-            {formattedAddress}
-          </span>
-        );
+      render: (shipping_address: UserAddress1) => {
+        const name = shipping_address.shipping_name || "";
+
+        const formattedAddress = [name].filter((part) => part).join("");
+
+        return <span>{formattedAddress}</span>;
       },
     },
     {
@@ -262,8 +286,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           rowKey="id"
           scroll={{ x: 1000 }}
           expandable={{
-            expandedRowRender: () => "",
-            rowExpandable: rowExpandable,
+            expandIconColumnIndex: -1, // This hides the expand icon column
           }}
         />
       </div>
