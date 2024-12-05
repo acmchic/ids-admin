@@ -61,6 +61,28 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
   const columns = [
     {
+      title: "ID",
+      dataIndex: "products",
+      key: "products",
+      align: "center",
+      width: 200,
+      render: (products: any[]) => (
+        <div className="flex flex-col gap-2">
+          {products.map((product) => (
+            <div key={product.id} className="mb-2 text-center">
+              <p
+                className={`mt-1 text-sm ${
+                  product.id > 104585 ? "text-red-500" : ""
+                }`}
+              >
+                {product.id}
+              </p>
+            </div>
+          ))}
+        </div>
+      ),
+    },
+    {
       title: "Name",
       dataIndex: "products",
       key: "products",
