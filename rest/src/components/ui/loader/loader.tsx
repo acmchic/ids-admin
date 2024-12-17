@@ -1,4 +1,4 @@
-import styles from "./loader.module.css";
+import { HashLoader } from "react-spinners";
 import cn from "classnames";
 
 interface Props {
@@ -10,6 +10,7 @@ interface Props {
 
 const Loader = (props: Props) => {
   const { className, showText = true, text = "Loading...", simple } = props;
+  
   return (
     <>
       {simple ? (
@@ -22,10 +23,10 @@ const Loader = (props: Props) => {
           )}
           style={{ height: "calc(100vh - 200px)" }}
         >
-          <div className={styles.loading} />
+          <HashLoader color="#36d7b7" size={50} />
 
           {showText && (
-            <h3 className="text-lg font-semibold text-body italic">{text}</h3>
+            <h1 className="text-lg font-semibold text-body italic"></h1>
           )}
         </div>
       )}

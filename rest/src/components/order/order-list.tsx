@@ -6,7 +6,6 @@ import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 import {
-  Order,
   OrderPaginator,
   OrderStatus,
   SortOrder,
@@ -20,6 +19,11 @@ import { useState } from "react";
 import TitleWithSort from "@components/ui/title-with-sort";
 import Link from "@components/ui/link";
 import Image from "next/dist/client/image";
+import { BiSolidTShirt } from "react-icons/bi";
+import { toast } from "react-toastify";
+import axios from "axios";
+import { PacmanLoader } from "react-spinners";
+import Actions from "./action";
 
 type IProps = {
   orders: OrderPaginator | null | undefined;
@@ -28,13 +32,18 @@ type IProps = {
   onOrder: (current: string) => void;
 };
 
+const convertToAtworkUrl = (imgUrl: string): string => {
+  return imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
+};
+
 const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   const { data, paginatorInfo } = orders! ?? {};
   const { t } = useTranslation();
-  const rowExpandable = (record: any) => record.children?.length;
   const router = useRouter();
   const { alignLeft } = useIsRTL();
-  console.log(data);
+  const [loading, setLoading] = useState(false);
+  const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
+
 
   const [sortingObj, setSortingObj] = useState<{
     sort: SortOrder;
@@ -65,11 +74,11 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "products",
       key: "products",
       align: "center",
-      width: 200,
+      width: 100,
       render: (products: any[]) => (
         <div className="flex flex-col gap-2">
-          {products.map((product) => (
-            <div key={product.id} className="mb-2 text-center">
+          {products.map((product, index) => (
+            <div key={`${product.id}-${index}`} className="mb-2 text-center">
               <p
                 className={`mt-1 text-sm ${
                   product.id > 104585 ? "text-red-500" : ""
@@ -90,9 +99,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       width: 200,
       render: (products: any[]) => (
         <div className="flex flex-col gap-2">
-          {products.map((product) => (
-            <div key={product.id} className="mb-2 text-center">
-              <p className="mt-1 text-sm">
+          {products.map((product, index) => (
+            <div key={`${product.id}-${index}`} className="mb-2 text-center">
+              <p
+                className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
+                onClick={() => window.open(`https://idreamshirt.com/products/${product.slug}/1`, "_blank")}
+              >
                 {product.name.length > 20
                   ? `${product.name.slice(0, 20)}...`
                   : product.name}
@@ -102,6 +114,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         </div>
       ),
     },
+    
     {
       title: "Image",
       dataIndex: "products",
@@ -110,13 +123,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       width: 100,
       render: (products: any[]) => (
         <div className="flex flex-col">
-          {products.map((product) => (
-            <div key={product.id} className="mb-2 text-center">
+          {products.map((product, index) => (
+            <div key={`${product.id}-${index}`} className="mb-2 text-center">
               <Image
                 src={product.pivot.img_url}
                 alt={product.name}
-                width={70} // Adjust width
-                height={70} // Adjust height
+                width={40}
+                height={40}
                 className="rounded-md"
               />
             </div>
@@ -124,40 +137,36 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         </div>
       ),
     },
-
-    // {
-    //   title: t("table:table-item-tracking-number"),
-    //   dataIndex: "order_mapping",
-    //   key: "order_mapping",
-    //   width: 40,
-    //   render: (order_mapping: string, record: Order) => {
-    // if (record.tracking_url) {
-    //   try {
-    // 	const url = new URL(record.tracking_url);
-    // 	const tracknum = url.searchParams.get("tracknum");
-
-    // 	const lastFourDigits = (tracknum || order_mapping || "").slice(-4);
-
-    // 	return (
-    // 	  <Link
-    // 		href={record.tracking_url}
-    // 		target="_blank"
-    // 		rel="noopener noreferrer"
-    // 		className="text-blue-500 hover:underline"
-    // 	  >
-    // 		{lastFourDigits}
-    // 	  </Link>
-    // 	);
-    //   } catch (error) {
-    // 	console.error("Invalid tracking URL:", error);
-    // 	return <>{(order_mapping || "").slice(-4)}</>;
-    //   }
-    // }
-
-    // return <>{(order_mapping || "").slice(-4)}</>;
-    // }
-
-    // },
+    {
+      title: "ATWORK",
+      dataIndex: "products",
+      key: "products",
+      align: "center",
+      width: 150,
+      render: (products: any[]) => (
+        <div className="flex flex-col">
+          {products.map((product, index) => (
+            <div key={`${product.id}-${index}`} className="mb-2 text-center relative group">
+              <div className="inline-block transition-transform transform group-hover:scale-150">
+                <a
+                  href={convertToAtworkUrl(product.pivot.img_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <Image
+                    src={convertToAtworkUrl(product.pivot.img_url)}
+                    alt={product.name}
+                    width={100}
+                    height={100}
+                    className="rounded-md object-cover"
+                  />
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      ),
+    },
 
     {
       title: (
@@ -219,7 +228,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       align: alignLeft,
       onHeaderCell: () => onHeaderClick("status"),
       render: (status: OrderStatus) => {
-        let additionalText = ""; // Define additional text based on status.id
+        let additionalText = "";
 
         if (status?.id === 2) additionalText = "(G)";
         else if (status?.id === 9) additionalText = "(Burgerprint)";
@@ -242,14 +251,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       key: "shipping_address",
       align: alignLeft,
       render: (shipping_address: UserAddress1) => {
-        // Safely access address fields and provide default values
         const street = shipping_address.shipping_address1 || "";
         const city = shipping_address.shipping_city || "";
         const province = shipping_address.shipping_province_code?.label || "";
         const zipcode = shipping_address.shipping_zipcode || "";
-        const country = "US"; // Fixed value for country
+        const country = "US";
 
-        // Format the address for Google Maps
         const formattedAddress = [street, city, province, zipcode, country]
           .filter((part) => part) // Remove any undefined or empty parts
           .join(", ");
@@ -290,11 +297,49 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "id",
       key: "actions",
       align: "center",
-      width: 100,
-      render: (id: string) => (
-        <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
-      ),
-    },
+      width: 200,
+      render: (id: string, status: string) => {
+        if (!id) return null;
+    
+        const handleFulfill = async () => {
+          setLoadingRows((prev) => ({ ...prev, [id]: true }));
+    
+          try {
+            const response = await axios.put(
+              `https://order.idreamshirt.com/orders/${id}`,
+              { status: 2 }
+            );
+            toast.success("Order fulfilled successfully!");
+          } catch (error) {
+            toast.error("Failed to fulfill the order. Please try again.");
+          } finally {
+            setLoadingRows((prev) => ({ ...prev, [id]: false }));
+          }
+        };
+    
+        return (
+          <>
+          <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={handleFulfill}
+              disabled={loadingRows[id]}
+              className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${
+                "bg-blue-500 hover:bg-blue-600"
+              }`}
+            >
+              {loadingRows[id] ? (
+                <PacmanLoader size={15} color="#fff" loading={loadingRows[id]} />
+              ) : (
+                <BiSolidTShirt />
+              )}
+              Fulfill
+            </button>
+          </div>
+          </>
+        );
+      },
+    }
   ];
 
   return (

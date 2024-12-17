@@ -1,9 +1,10 @@
-import cn from "classnames";
-import styles from "./page-loader.module.css";
+import { PacmanLoader } from "react-spinners";
 import { useTranslation } from "next-i18next";
+import cn from "classnames";
 
 const PageLoader = () => {
   const { t } = useTranslation("common");
+
   return (
     <div
       className={cn(
@@ -11,9 +12,9 @@ const PageLoader = () => {
       )}
     >
       <div className="flex relative">
-        <div className={styles.page_loader}></div>
+        <PacmanLoader color="#36d7b7" size={80} />
+
         <h3 className="text-sm font-semibold text-body italic absolute top-1/2 -mt-2 w-full text-center">
-          {t("text-loading")}
         </h3>
       </div>
     </div>
