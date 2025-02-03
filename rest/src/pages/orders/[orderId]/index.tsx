@@ -145,14 +145,16 @@ export default function OrderDetailsPage() {
 	return (
 		<Card>
 			<div className="flex flex-col lg:flex-row items-center">
-			<h3
-				className="text-2xl font-semibold text-heading text-center lg:text-start w-full lg:w-1/3 mb-8 lg:mb-0 whitespace-nowrap cursor-pointer"
-				onClick={() => window.open(`https://idreamshirt.com/orders/${data?.order?.order_num}`, '_blank')}
-				>
-				{t("form:input-label-order-id")} - {data?.order?.order_num}
-			</h3>
-			<h4>{data?.order?.shipping_address && data.order.shipping_address.shipping_name}</h4>
-			<h4>{data?.order?.shipping_address && data.order.shipping_address.shipping_email}</h4>
+			<div className="flex flex-col items-start">
+				<h3
+					className="text-2xl font-semibold text-heading text-center lg:text-start w-full lg:w-1/3 mb-8 lg:mb-0 whitespace-nowrap cursor-pointer"
+					onClick={() => window.open(`https://idreamshirt.com/orders/${data?.order?.order_num}`, '_blank')}
+					>
+					{t("form:input-label-order-id")} - {data?.order?.order_num}
+				</h3>
+				<h4>{data?.order?.shipping_address && data.order.shipping_address.shipping_name}</h4>
+				<h4>{data?.order?.shipping_address && data.order.shipping_address.shipping_email}</h4>
+			</div>
 
 
 				<form
