@@ -34,6 +34,7 @@ export declare type UserAddress = {
   state?: Maybe<Scalars["String"]>;
   zip?: Maybe<Scalars["String"]>;
   street_address?: Maybe<Scalars["String"]>;
+  order_num?: Maybe<Scalars["String"]>;
 };
 export declare type UserAddress1 = {
   country?: Maybe<Scalars["String"]>;
