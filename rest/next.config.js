@@ -38,7 +38,7 @@ module.exports = withPWA({
       "api.idreamshirt.com",
       "api.idreamshirt.local",
       "api.teetochic.com",
-      "order.idreamshirt.com"
+      "orders.idreamshirt.com"
     ],
   },
   typescript: {

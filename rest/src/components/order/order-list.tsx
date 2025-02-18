@@ -306,7 +306,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     
           try {
             const response = await axios.put(
-              `https://order.idreamshirt.com/orders/${id}`,
+              `https://orders.idreamshirt.com/orders/${id}`,
               { status: 2 }
             );
             toast.success("Order fulfilled successfully!");

@@ -5,7 +5,7 @@ import path from "path";
 import cors from 'cors';
 
 const corsOptions = {
-  origin: 'https://order.idreamshirt.com',
+  origin: 'https://orders.idreamshirt.com',
 };
 
 export default async function handler(req, res) {
