@@ -86,11 +86,17 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               >
                 {product.id}
               </p>
+              {product.image?.original && (
+                <p className="text-xs text-gray-600 truncate">
+                  {product.image.original.split("/").slice(0, 2).join("/")}
+                </p>
+              )}
             </div>
           ))}
         </div>
       ),
     },
+    
     {
       title: "Name",
       dataIndex: "products",
