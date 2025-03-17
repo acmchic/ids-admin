@@ -23,7 +23,7 @@ import { BiSolidTShirt } from "react-icons/bi";
 import { toast } from "react-toastify";
 import axios from "axios";
 import { PacmanLoader } from "react-spinners";
-import Actions from "./action";
+import { UsState } from "../../utils/us-states";
 
 type IProps = {
   orders: OrderPaginator | null | undefined;
@@ -31,12 +31,21 @@ type IProps = {
   onSort: (current: any) => void;
   onOrder: (current: string) => void;
 };
+function nameToSlug(name: string) {
+  return name
+    .replace(/T-Shirt/gi, 't-shirt')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .trim();
+}
 
 const convertToAtworkUrl = (imgUrl: string): string => {
   return imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
 };
 
 const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
+  console.log("orders ==> ", orders);
   const { data, paginatorInfo } = orders! ?? {};
   const { t } = useTranslation();
   const router = useRouter();
@@ -52,6 +61,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     sort: SortOrder.Desc,
     column: null,
   });
+
 
   const onHeaderClick = (column: string | null) => ({
     onClick: () => {
@@ -80,9 +90,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           {products.map((product, index) => (
             <div key={`${product.id}-${index}`} className="mb-2 text-center">
               <p
-                className={`mt-1 text-sm ${
-                  product.id > 104585 ? "text-red-500" : ""
-                }`}
+                className={`mt-1 text-sm ${product.id > 104585 ? "text-red-500" : ""
+                  }`}
               >
                 {product.id}
               </p>
@@ -96,7 +105,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         </div>
       ),
     },
-    
+
     {
       title: "Name",
       dataIndex: "products",
@@ -105,22 +114,40 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       width: 200,
       render: (products: any[]) => (
         <div className="flex flex-col gap-2">
-          {products.map((product, index) => (
-            <div key={`${product.id}-${index}`} className="mb-2 text-center">
-              <p
-                className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
-                onClick={() => window.open(`https://idreamshirt.com/products/${product.slug}/1`, "_blank")}
-              >
-                {product.name.length > 20
-                  ? `${product.name.slice(0, 20)}...`
-                  : product.name}
-              </p>
-            </div>
-          ))}
+          {products.map((product, index) => {
+            const variant = product.pivot?.variation
+              ? JSON.parse(product.pivot.variation)
+              : null;
+
+            const variantName = nameToSlug(variant?.name ?? "");
+            const color = nameToSlug(variant?.color ?? "");
+            const size = nameToSlug(variant?.size ?? "");
+            const side = variant?.side ?? "";
+
+            return (
+              <div key={`${product.id}-${index}`} className="mb-2 text-center">
+                <p
+                  className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
+                  onClick={() =>
+                    window.open(
+                      `https://idreamshirt.com/products/${product.slug}/${variantName}-${color}-size_${size}`,
+                      "_blank"
+                    )
+                  }
+                >
+                  {product.name.length > 20
+                    ? `${product.name.slice(0, 20)}...`
+                    : product.name}
+                </p>
+                {side && (
+                  <p className="text-xs text-gray-500 pt-2">{side}</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       ),
     },
-    
     {
       title: "Image",
       dataIndex: "products",
@@ -178,9 +205,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       title: (
         <TitleWithSort
           title={t("table:table-item-total")}
-          ascending={
-            sortingObj.sort === SortOrder.Asc && sortingObj.column === "total"
-          }
+          ascending={sortingObj.sort === SortOrder.Asc && sortingObj.column === "total"}
           isActive={sortingObj.column === "total"}
         />
       ),
@@ -190,7 +215,20 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       align: "center",
       width: 120,
       onHeaderCell: () => onHeaderClick("total"),
+      render: (total: number, record: any) => {
+        const discount = record.discount || 0;
+
+        return (
+          <span>
+            {total.toFixed(2)}
+            {discount > 0 && (
+              <span className="text-red-500"> ({discount.toFixed(2)})</span>
+            )}
+          </span>
+        );
+      },
     },
+
     {
       title: (
         <TitleWithSort
@@ -259,18 +297,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       render: (shipping_address: UserAddress1) => {
         const street = shipping_address.shipping_address1 || "";
         const city = shipping_address.shipping_city || "";
-        const province = shipping_address.shipping_province_code?.label || "";
+        const provinceCode: string = shipping_address.shipping_province_code || "";
         const zipcode = shipping_address.shipping_zipcode || "";
-        const country = "US";
-
-        const formattedAddress = [street, city, province, zipcode, country]
-          .filter((part) => part) // Remove any undefined or empty parts
-          .join(", ");
-
+    
+        const stateNames = UsState();
+        const stateFullName = stateNames[provinceCode as keyof typeof stateNames] || provinceCode;
+    
+        const formattedAddress = (
+          <div>
+            <div>{[street, city, zipcode].filter((part) => part).join(", ")}</div>
+            <div>{stateFullName} (US)</div>
+          </div>
+        );
+    
         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          formattedAddress
+          `${street}, ${city}, ${zipcode}, ${stateFullName} (US)`
         )}`;
-
+    
         return (
           <Link
             href={googleMapsUrl}
@@ -283,6 +326,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         );
       },
     },
+    
 
     {
       title: t("common:text-invoice"),
@@ -306,10 +350,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       width: 200,
       render: (id: string, status: string) => {
         if (!id) return null;
-    
+
         const handleFulfill = async () => {
           setLoadingRows((prev) => ({ ...prev, [id]: true }));
-    
+
           try {
             const response = await axios.put(
               `https://orders.idreamshirt.com/orders/${id}`,
@@ -322,26 +366,25 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             setLoadingRows((prev) => ({ ...prev, [id]: false }));
           }
         };
-    
+
         return (
           <>
-          <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={handleFulfill}
-              disabled={loadingRows[id]}
-              className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${
-                "bg-blue-500 hover:bg-blue-600"
-              }`}
-            >
-              {loadingRows[id] ? (
-                <PacmanLoader size={15} color="#fff" loading={loadingRows[id]} />
-              ) : (
-                <BiSolidTShirt />
-              )}
-              Fulfill
-            </button>
-          </div>
+            <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
+            <div className="flex items-center justify-center gap-2">
+              <button
+                onClick={handleFulfill}
+                disabled={loadingRows[id]}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${"bg-blue-500 hover:bg-blue-600"
+                  }`}
+              >
+                {loadingRows[id] ? (
+                  <PacmanLoader size={15} color="#fff" loading={loadingRows[id]} />
+                ) : (
+                  <BiSolidTShirt />
+                )}
+                Fulfill
+              </button>
+            </div>
           </>
         );
       },
