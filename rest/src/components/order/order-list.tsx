@@ -350,15 +350,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       width: 200,
       render: (id: string, status: string) => {
         if (!id) return null;
-
+    
         const handleFulfill = async () => {
           setLoadingRows((prev) => ({ ...prev, [id]: true }));
-
+    
           try {
-            const response = await axios.put(
-              `https://orders.idreamshirt.com/orders/${id}`,
-              { status: 2 }
-            );
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 2 });
             toast.success("Order fulfilled successfully!");
           } catch (error) {
             toast.error("Failed to fulfill the order. Please try again.");
@@ -366,16 +363,29 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             setLoadingRows((prev) => ({ ...prev, [id]: false }));
           }
         };
-
+    
+        const handleBurger = async () => {
+          setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: true }));
+    
+          try {
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 9 });
+            toast.success("Burger order fulfilled successfully!");
+          } catch (error) {
+            toast.error("Failed to fulfill the burger order. Please try again.");
+          } finally {
+            setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: false }));
+          }
+        };
+    
         return (
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
-            <div className="flex items-center justify-center gap-2">
+            <div className="flex flex-col items-center gap-2">
+              {/* Fulfill Button */}
               <button
                 onClick={handleFulfill}
                 disabled={loadingRows[id]}
-                className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${"bg-blue-500 hover:bg-blue-600"
-                  }`}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-blue-500 hover:bg-blue-600 transition"
               >
                 {loadingRows[id] ? (
                   <PacmanLoader size={15} color="#fff" loading={loadingRows[id]} />
@@ -384,11 +394,26 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 )}
                 Fulfill
               </button>
+    
+              {/* Burger Button */}
+              <button
+                onClick={handleBurger}
+                disabled={loadingRows[`burger-${id}`]}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition"
+              >
+                {loadingRows[`burger-${id}`] ? (
+                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
+                ) : (
+                  <BiSolidTShirt />
+                )}
+                Burger
+              </button>
             </div>
           </>
         );
       },
     }
+    
   ];
 
   return (
