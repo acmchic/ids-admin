@@ -333,15 +333,27 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "shipping_address",
       key: "shipping_address",
       align: "center",
-
       render: (shipping_address: UserAddress1) => {
         const name = shipping_address.shipping_name || "";
-
+    
         const formattedAddress = [name].filter((part) => part).join("");
-
-        return <span>{formattedAddress}</span>;
+    
+        const handleCopy = () => {
+          navigator.clipboard.writeText(formattedAddress);
+        };
+    
+        return (
+          <span
+            onClick={handleCopy}
+            style={{ cursor: "pointer", color: "#1890ff" }}
+            title="Click to copy"
+          >
+            {formattedAddress}
+          </span>
+        );
       },
     },
+    
     {
       title: t("table:table-item-actions"),
       dataIndex: "id",
@@ -376,12 +388,51 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: false }));
           }
         };
+        const handleMerchize = async () => {
+          setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: true }));
+    
+          try {
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 68 });
+            toast.success("Merchize order fulfilled successfully!");
+          } catch (error) {
+            toast.error("Failed to fulfill the Merchize order. Please try again.");
+          } finally {
+            setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: false }));
+          }
+        };
     
         return (
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
             <div className="flex flex-col items-center gap-2">
               {/* Fulfill Button */}
+              
+              <button
+                onClick={handleMerchize}
+                disabled={loadingRows[`merchize-${id}`]}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-500 hover:bg-green-600 transition"
+              >
+                {loadingRows[`merchize-${id}`] ? (
+                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
+                ) : (
+                  ''
+                )}
+                Merchize
+              </button>
+              {/* Burger Button */}
+              <button
+                onClick={handleBurger}
+                disabled={loadingRows[`burger-${id}`]}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition"
+              >
+                {loadingRows[`burger-${id}`] ? (
+                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
+                ) : (
+                  ''
+                )}
+                Burger
+              </button>
+
               <button
                 onClick={handleFulfill}
                 disabled={loadingRows[id]}
@@ -393,20 +444,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                   <BiSolidTShirt />
                 )}
                 Fulfill
-              </button>
-    
-              {/* Burger Button */}
-              <button
-                onClick={handleBurger}
-                disabled={loadingRows[`burger-${id}`]}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition"
-              >
-                {loadingRows[`burger-${id}`] ? (
-                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
-                ) : (
-                  <BiSolidTShirt />
-                )}
-                Burger
               </button>
             </div>
           </>
