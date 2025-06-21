@@ -19,36 +19,37 @@ const Navbar = () => {
 	const { permissions } = getAuthCredentials();
 
 	return (
-		<header className="bg-white shadow fixed w-full z-40">
-			<nav className="px-5 md:px-8 py-4 flex items-center justify-between">
-				{/* <!-- Mobile menu button --> */}
-				<motion.button
-					whileTap={{ scale: 0.88 }}
-					onClick={toggleSidebar}
-					className="flex pe-2 h-full items-center justify-center focus:outline-none focus:text-accent lg:hidden"
-				>
-					<NavbarIcon />
-				</motion.button>
+		<></>
+		// <header className="bg-white shadow fixed w-full z-40">
+		// 	<nav className="px-5 md:px-8 py-4 flex items-center justify-between">
+		// 		{/* <!-- Mobile menu button --> */}
+		// 		<motion.button
+		// 			whileTap={{ scale: 0.88 }}
+		// 			onClick={toggleSidebar}
+		// 			className="flex pe-2 h-full items-center justify-center focus:outline-none focus:text-accent lg:hidden"
+		// 		>
+		// 			<NavbarIcon />
+		// 		</motion.button>
 
-				<div className="hidden md:flex ms-5 me-auto">
-					<Logo />
-				</div>
+		// 		<div className="hidden md:flex ms-5 me-auto">
+		// 			<Logo />
+		// 		</div>
 
-				<div className="flex items-center space-s-5 lg:space-s-8">
-					{hasAccess(adminAndOwnerOnly, permissions) && (
-						<LinkButton
-							href={ROUTES.CREATE_SHOP}
-							className="ms-4 md:ms-6"
-							size="small"
-						>
-							{t("common:text-create-shop")}
-						</LinkButton>
-					)}
+		// 		<div className="flex items-center space-s-5 lg:space-s-8">
+		// 			{hasAccess(adminAndOwnerOnly, permissions) && (
+		// 				<LinkButton
+		// 					href={ROUTES.CREATE_SHOP}
+		// 					className="ms-4 md:ms-6"
+		// 					size="small"
+		// 				>
+		// 					{t("common:text-create-shop")}
+		// 				</LinkButton>
+		// 			)}
 
-					<AuthorizedMenu />
-				</div>
-			</nav>
-		</header>
+		// 			<AuthorizedMenu />
+		// 		</div>
+		// 	</nav>
+		// </header>
 	);
 };
 

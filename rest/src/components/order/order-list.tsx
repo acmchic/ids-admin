@@ -1,10 +1,25 @@
-import Pagination from "@components/ui/pagination";
+import { useState } from "react";
+import { useRouter } from "next/router";
+import { useTranslation } from "next-i18next";
+import Image from "next/dist/client/image";
+import { BiSolidTShirt } from "react-icons/bi";
+import { toast } from "react-toastify";
+import axios from "axios";
 import dayjs from "dayjs";
-import { Table } from "@components/ui/table";
-import ActionButtons from "@components/common/action-buttons";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+
+import { Table } from "@components/ui/table";
+import Pagination from "@components/ui/pagination";
+import ActionButtons from "@components/common/action-buttons";
+import TitleWithSort from "@components/ui/title-with-sort";
+import Link from "@components/ui/link";
+import { PacmanLoader } from "react-spinners";
+
+import { useIsRTL } from "@utils/locals";
+import { UsState } from "../../utils/us-states";
+
 import {
   OrderPaginator,
   OrderStatus,
@@ -12,18 +27,29 @@ import {
   UserAddress1,
 } from "@ts-types/generated";
 
-import { useRouter } from "next/router";
-import { useTranslation } from "next-i18next";
-import { useIsRTL } from "@utils/locals";
-import { useState } from "react";
-import TitleWithSort from "@components/ui/title-with-sort";
-import Link from "@components/ui/link";
-import Image from "next/dist/client/image";
-import { BiSolidTShirt } from "react-icons/bi";
-import { toast } from "react-toastify";
-import axios from "axios";
-import { PacmanLoader } from "react-spinners";
-import { UsState } from "../../utils/us-states";
+const logFulfilledOrders = async (orders: any[], statusCode: number) => {
+  try {
+    const now = new Date();
+    const yyyyMM = now.toISOString().slice(0, 7); // e.g., "2025-06"
+    const dd = now.toISOString().slice(8, 10); // e.g., "09"
+
+    const ffName = statusCode === 68 ? "merchize" : statusCode === 9 ? "burger" : "gearment";
+    const logFileName = `/logs/${yyyyMM}/${dd}/${ffName}.log`;
+
+    const logLines = orders.map(order => {
+      const customerName = order.shipping_address?.shipping_name || "Unknown";
+      return `${customerName}`;
+    });
+
+    await fetch('/api/log-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: logFileName, lines: logLines })
+    });
+  } catch (err) {
+    console.error("Log error:", err);
+  }
+};
 
 type IProps = {
   orders: OrderPaginator | null | undefined;
@@ -31,54 +57,185 @@ type IProps = {
   onSort: (current: any) => void;
   onOrder: (current: string) => void;
 };
-function nameToSlug(name: string) {
-  return name
-    .replace(/T-Shirt/gi, 't-shirt')
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .replace(/\s+/g, '-')
-    .trim();
-}
 
-const convertToAtworkUrl = (imgUrl: string): string => {
-  return imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
-};
+const nameToSlug = (name: string) =>
+  name.replace(/T-Shirt/gi, "t-shirt")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .replace(/\s+/g, "-")
+    .trim();
+
+const convertToAtworkUrl = (imgUrl: string): string =>
+  imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
+
 
 const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
-  console.log("orders ==> ", orders);
-  const { data, paginatorInfo } = orders! ?? {};
+  const { data, paginatorInfo } = orders ?? {};
   const { t } = useTranslation();
   const router = useRouter();
   const { alignLeft } = useIsRTL();
+
   const [loading, setLoading] = useState(false);
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
-
-
-  const [sortingObj, setSortingObj] = useState<{
-    sort: SortOrder;
-    column: string | null;
-  }>({
-    sort: SortOrder.Desc,
-    column: null,
-  });
-
+  const [selectedOrders, setSelectedOrders] = useState<Record<string, number>>({});
+  const [sortingObj, setSortingObj] = useState({ sort: SortOrder.Desc, column: null });
 
   const onHeaderClick = (column: string | null) => ({
     onClick: () => {
-      onSort((currentSortDirection: SortOrder) =>
-        currentSortDirection === SortOrder.Desc ? SortOrder.Asc : SortOrder.Desc
-      );
+      onSort((cur: SortOrder) => (cur === SortOrder.Desc ? SortOrder.Asc : SortOrder.Desc));
       onOrder(column!);
-
       setSortingObj({
-        sort:
-          sortingObj.sort === SortOrder.Desc ? SortOrder.Asc : SortOrder.Desc,
-        column: column,
+        sort: sortingObj.sort === SortOrder.Desc ? SortOrder.Asc : SortOrder.Desc,
+        column,
       });
     },
   });
 
+  const handleUnifiedFulfill = async () => {
+    setLoading(true);
+    toast.info("Processing fulfill...!!");
+  
+    const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+  
+    try {
+      const grouped: Record<number, any[]> = {};
+      data?.forEach(order => {
+        const status = selectedOrders[order.id];
+        if (status) {
+          if (!grouped[status]) grouped[status] = [];
+          grouped[status].push(order);
+        }
+      });
+  
+      for (const status of Object.keys(grouped)) {
+        const ordersForStatus = grouped[+status];
+  
+        for (const order of ordersForStatus) {
+          try {
+            await axios.put(`https://orders.idreamshirt.com/orders/${order.id}`, {
+              status: +status,
+            });
+            await logFulfilledOrders([order], +status);
+          } catch (err) {
+            console.error(`❌ Failed to fulfill order ${order.id}`, err);
+          }
+  
+          await sleep(1000);
+        }
+      }
+  
+      toast.success("All selected orders fulfilled.");
+      setSelectedOrders({});
+      router.reload();
+    } catch (e) {
+      console.error(e);
+      toast.error("Some fulfillments failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+
   const columns = [
+    {
+      title: "Fulfill",
+      dataIndex: "id",
+      key: "select",
+      align: "center",
+      width: 200,
+      render: (_: any, row: any) => {
+        const hasClassicTee = row.products?.some((product: any) => {
+          const variant = product.pivot?.variation
+            ? JSON.parse(product.pivot.variation)
+            : null;
+          const variantName = nameToSlug(variant?.name || "");
+          return variantName.includes("classic-t-shirt");
+        });
+    
+        const fulfillments = hasClassicTee
+          ? [
+            { label: "G", value: 2, color: "blue" },
+              { label: "B_F", value: 12, color: "red" },
+              { label: "B_G", value: 11, color: "red" },
+            ]
+          : [{ label: "G", value: 2, color: "blue" },{ label: "B", value: 9, color: "red" }];
+    
+        return (
+          <div className="flex flex-row justify-center gap-3">
+            {fulfillments.map(ff => (
+              <button
+                key={ff.value}
+                onClick={() =>
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: ff.value }))
+                }
+                className={`px-3 py-2 rounded-md border text-white bg-${ff.color}-500 hover:bg-${ff.color}-600 text-sm ${
+                  selectedOrders[row.id] === ff.value
+                    ? 'ring-2 ring-offset-1 ring-' + ff.color + '-300'
+                    : ''
+                }`}
+              >
+                {ff.label}
+              </button>
+            ))}
+          </div>
+        );
+      },
+    }
+    ,
+    
+    {
+      title: "Customer",
+      dataIndex: "shipping_address",
+      key: "shipping_info",
+      align: alignLeft,
+      width: 150,
+      render: (shipping_address: UserAddress1) => {
+        const name = shipping_address.shipping_name || "";
+        const street = shipping_address.shipping_address1 || "";
+        const city = shipping_address.shipping_city || "";
+        const provinceCode = shipping_address.shipping_province_code || "";
+        const zipcode = shipping_address.shipping_zipcode || "";
+        const shippingMethod = shipping_address.shipping_method || "standard";
+    
+        const stateNames = UsState();
+        const stateFullName = stateNames[provinceCode as keyof typeof stateNames] || provinceCode;
+    
+        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+          `${street}, ${city}, ${zipcode}, ${stateFullName} (US)`
+        )}`;
+    
+        const handleCopy = () => {
+          navigator.clipboard.writeText(name);
+          toast.success("COPIED");
+        };
+    
+        return (
+          <div className="text-sm text-blue-600 flex flex-col gap-8">
+            <div>
+              <p
+                className="cursor-pointer hover:underline text-blue-500"
+                onClick={handleCopy}
+                title="Click to copy"
+              >
+                {name}
+              </p>
+              {shippingMethod === "express" && (
+                <p className="text-xs text-red-600 pt-6 font-semibold uppercase">Express Shipping</p>
+              )}
+            </div>
+    
+            <Link
+              href={googleMapsUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:underline text-xs  text-black"
+            >
+              {stateFullName}
+            </Link>
+          </div>
+        );
+      },
+    },
     {
       title: "ID",
       dataIndex: "products",
@@ -89,14 +246,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         <div className="flex flex-col gap-2">
           {products.map((product, index) => (
             <div key={`${product.id}-${index}`} className="mb-2 text-center">
-              <p
-                className={`mt-1 text-sm ${product.id > 104585 ? "text-red-500" : ""
+             
+              {product.image?.original && (
+                <p
+                className={`mt-1 text-md ${product.id > 104585 ? "text-red-500" : ""
                   }`}
               >
-                {product.id}
-              </p>
-              {product.image?.original && (
-                <p className="text-xs text-gray-600 truncate">
                   {product.image.original.split("/").slice(0, 2).join("/")}
                 </p>
               )}
@@ -105,6 +260,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         </div>
       ),
     },
+    
 
     {
       title: "Name",
@@ -115,6 +271,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       render: (products: any[]) => (
         <div className="flex flex-col gap-2">
           {products.map((product, index) => {
+          // console.log("product ==> ", product);
             const variant = product.pivot?.variation
               ? JSON.parse(product.pivot.variation)
               : null;
@@ -139,6 +296,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                     ? `${product.name.slice(0, 20)}...`
                     : product.name}
                 </p>
+                
                 {side && (
                   <p className="text-xs text-gray-500 pt-2">{side}</p>
                 )}
@@ -153,7 +311,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "products",
       key: "products",
       align: "center",
-      width: 100,
+      width: 200,
       render: (products: any[]) => (
         <div className="flex flex-col">
           {products.map((product, index) => (
@@ -161,8 +319,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               <Image
                 src={product.pivot.img_url}
                 alt={product.name}
-                width={40}
-                height={40}
+                width={100}
+                height={100}
                 className="rounded-md"
               />
             </div>
@@ -175,22 +333,22 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "products",
       key: "products",
       align: "center",
-      width: 150,
+      width: 200,
       render: (products: any[]) => (
         <div className="flex flex-col">
           {products.map((product, index) => (
             <div key={`${product.id}-${index}`} className="mb-2 text-center relative group">
               <div className="inline-block transition-transform transform group-hover:scale-150">
                 <a
-                  href={convertToAtworkUrl(product.pivot.img_url)}
+                  href={product.img_url}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <Image
                     src={convertToAtworkUrl(product.pivot.img_url)}
                     alt={product.name}
-                    width={100}
-                    height={100}
+                    width={130}
+                    height={150}
                     className="rounded-md object-cover"
                   />
                 </a>
@@ -200,6 +358,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         </div>
       ),
     },
+    {
+      title: "PRINT TECH",
+      dataIndex: "products",
+      key: "print_tech",
+      align: "center",
+      width: 120,
+      render: (products: any[]) => (
+        <div className="flex flex-col items-center gap-2">
+          {products.map((product, index) => (
+            <span key={index} className="text-xs bg-gray-100 px-2 py-1 rounded">
+              {product.pivot?.print_tech || "-"}
+            </span>
+          ))}
+        </div>
+      ),
+    },
+    
 
     {
       title: (
@@ -289,70 +464,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       },
     },
 
-    {
-      title: t("table:table-item-shipping-address"),
-      dataIndex: "shipping_address",
-      key: "shipping_address",
-      align: alignLeft,
-      render: (shipping_address: UserAddress1) => {
-        const street = shipping_address.shipping_address1 || "";
-        const city = shipping_address.shipping_city || "";
-        const provinceCode: string = shipping_address.shipping_province_code || "";
-        const zipcode = shipping_address.shipping_zipcode || "";
     
-        const stateNames = UsState();
-        const stateFullName = stateNames[provinceCode as keyof typeof stateNames] || provinceCode;
-    
-        const formattedAddress = (
-          <div>
-            <div>{[street, city, zipcode].filter((part) => part).join(", ")}</div>
-            <div>{stateFullName} (US)</div>
-          </div>
-        );
-    
-        const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          `${street}, ${city}, ${zipcode}, ${stateFullName} (US)`
-        )}`;
-    
-        return (
-          <Link
-            href={googleMapsUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-500 hover:underline"
-          >
-            {formattedAddress}
-          </Link>
-        );
-      },
-    },
-    
-
-    {
-      title: t("common:text-invoice"),
-      dataIndex: "shipping_address",
-      key: "shipping_address",
-      align: "center",
-      render: (shipping_address: UserAddress1) => {
-        const name = shipping_address.shipping_name || "";
-    
-        const formattedAddress = [name].filter((part) => part).join("");
-    
-        const handleCopy = () => {
-          navigator.clipboard.writeText(formattedAddress);
-        };
-    
-        return (
-          <span
-            onClick={handleCopy}
-            style={{ cursor: "pointer", color: "#1890ff" }}
-            title="Click to copy"
-          >
-            {formattedAddress}
-          </span>
-        );
-      },
-    },
     
     {
       title: t("table:table-item-actions"),
@@ -455,6 +567,17 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
   return (
     <>
+      {Object.keys(selectedOrders).length > 0 && (
+        <div className="mb-4">
+          <button
+            className="px-4 py-2 bg-indigo-600 text-white rounded"
+            onClick={handleUnifiedFulfill}
+          >
+            Fulfill Selected ({Object.keys(selectedOrders).length})
+          </button>
+        </div>
+      )}
+
       <div className="rounded overflow-hidden shadow mb-6">
         <Table
           //@ts-ignore
@@ -463,24 +586,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           data={data}
           rowKey="id"
           scroll={{ x: 1000 }}
-          expandable={{
-            expandIconColumnIndex: -1, // This hides the expand icon column
-          }}
+          expandable={{ expandIconColumnIndex: -1 }}
         />
       </div>
 
       {!!paginatorInfo?.total && (
         <div className="flex justify-end items-center">
           <Pagination
-            total={paginatorInfo?.total}
-            current={paginatorInfo?.currentPage}
-            pageSize={paginatorInfo?.perPage}
+            total={paginatorInfo.total}
+            current={paginatorInfo.currentPage}
+            pageSize={paginatorInfo.perPage}
             onChange={onPagination}
           />
         </div>
       )}
     </>
   );
+
 };
 
 export default OrderList;
