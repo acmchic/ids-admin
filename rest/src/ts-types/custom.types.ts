@@ -69,6 +69,8 @@ export type QueryOptionsType = {
   limit?: number;
   orderBy?: string;
   sortedBy?: SortOrder;
+  date?: string;   
+  status?: number; 
 };
 
 export type QueryParamsType = {

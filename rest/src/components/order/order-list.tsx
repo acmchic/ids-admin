@@ -19,6 +19,7 @@ import { PacmanLoader } from "react-spinners";
 
 import { useIsRTL } from "@utils/locals";
 import { UsState } from "../../utils/us-states";
+import { AlertTriangle } from "lucide-react";
 
 import {
   OrderPaginator,
@@ -50,6 +51,31 @@ const logFulfilledOrders = async (orders: any[], statusCode: number) => {
     console.error("Log error:", err);
   }
 };
+
+const logFulfilledOrdersError = async (orders: any[], statusCode: number, errorMessage: string) => {
+  try {
+    const now = new Date();
+    const yyyyMM = now.toISOString().slice(0, 7);
+    const dd = now.toISOString().slice(8, 10);
+
+    const ffName = statusCode === 68 ? "merchize" : statusCode === 9 ? "burger" : "gearment";
+    const logFileName = `/logs/${yyyyMM}/${dd}/${ffName}.error.log`;
+
+    const logLines = orders.map(order => {
+      const customerName = order.shipping_address?.shipping_name || "Unknown";
+      return `❌ ${customerName} | Order ID: ${order.id} | Error: ${errorMessage}`;
+    });
+
+    await fetch('/api/log-order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fileName: logFileName, lines: logLines })
+    });
+  } catch (err) {
+    console.error("Log write error:", err);
+  }
+};
+
 
 type IProps = {
   orders: OrderPaginator | null | undefined;
@@ -116,11 +142,18 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               status: +status,
             });
             await logFulfilledOrders([order], +status);
-          } catch (err) {
+          } catch (err: any) {
             console.error(`❌ Failed to fulfill order ${order.id}`, err);
+          
+            const errMsg =
+              err?.response?.data?.message ||
+              err?.message ||
+              "Unknown error";
+          
+            await logFulfilledOrdersError([order], +status, errMsg);
           }
   
-          await sleep(1000);
+          await sleep(500);
         }
       }
   
@@ -246,7 +279,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         <div className="flex flex-col gap-2">
           {products.map((product, index) => (
             <div key={`${product.id}-${index}`} className="mb-2 text-center">
-             
+             <p>{product.id}</p>
               {product.image?.original && (
                 <p
                 className={`mt-1 text-md ${product.id > 104585 ? "text-red-500" : ""
@@ -271,18 +304,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       render: (products: any[]) => (
         <div className="flex flex-col gap-2">
           {products.map((product, index) => {
-          // console.log("product ==> ", product);
             const variant = product.pivot?.variation
               ? JSON.parse(product.pivot.variation)
               : null;
-
+    
             const variantName = nameToSlug(variant?.name ?? "");
             const color = nameToSlug(variant?.color ?? "");
             const size = nameToSlug(variant?.size ?? "");
             const side = variant?.side ?? "";
-
+    
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
+                {/* Hiển thị impress & click */}
+                <p className="text-xs text-gray-700">
+                  Imp: {product.impressions ?? 0} | Click: {product.clicks ?? 0}
+                </p>
+    
+                {/* Tên sản phẩm (có link) */}
                 <p
                   className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
                   onClick={() =>
@@ -296,7 +334,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                     ? `${product.name.slice(0, 20)}...`
                     : product.name}
                 </p>
-                
+    
+                {/* Hiển thị side nếu có */}
                 {side && (
                   <p className="text-xs text-gray-500 pt-2">{side}</p>
                 )}
@@ -305,7 +344,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           })}
         </div>
       ),
-    },
+    }
+    ,
     {
       title: "Image",
       dataIndex: "products",
@@ -314,20 +354,29 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       width: 200,
       render: (products: any[]) => (
         <div className="flex flex-col">
-          {products.map((product, index) => (
-            <div key={`${product.id}-${index}`} className="mb-2 text-center">
-              <Image
-                src={product.pivot.img_url}
-                alt={product.name}
-                width={100}
-                height={100}
-                className="rounded-md"
-              />
-            </div>
-          ))}
+          {products.map((product, index) => {
+            const imgUrl = product.pivot?.img_url || "";
+            const match = imgUrl.split("/media/")[1]?.split("/")[0] || "";
+    
+            return (
+              <div key={`${product.id}-${index}`} className="mb-2 text-center">
+                <Image
+                  src={imgUrl}
+                  alt={product.name}
+                  width={100}
+                  height={100}
+                  className="rounded-md"
+                />
+                {match && (
+                  <p className="pt-1">{match}</p>
+                )}
+              </div>
+            );
+          })}
         </div>
       ),
     },
+    
     {
       title: "ATWORK",
       dataIndex: "products",
@@ -337,8 +386,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       render: (products: any[]) => (
         <div className="flex flex-col">
           {products.map((product, index) => (
-            <div key={`${product.id}-${index}`} className="mb-2 text-center relative group">
-              <div className="inline-block transition-transform transform group-hover:scale-150">
+            <div
+              key={`${product.id}-${index}`}
+              className="mb-2 text-center relative group"
+            >
+              
+    
+              <div className="inline-block transition-transform transform group-hover:scale-150 relative">
                 <a
                   href={product.img_url}
                   target="_blank"
@@ -358,22 +412,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         </div>
       ),
     },
-    {
-      title: "PRINT TECH",
-      dataIndex: "products",
-      key: "print_tech",
-      align: "center",
-      width: 120,
-      render: (products: any[]) => (
-        <div className="flex flex-col items-center gap-2">
-          {products.map((product, index) => (
-            <span key={index} className="text-xs bg-gray-100 px-2 py-1 rounded">
-              {product.pivot?.print_tech || "-"}
-            </span>
-          ))}
-        </div>
-      ),
-    },
+    
     
 
     {
@@ -448,11 +487,20 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       onHeaderCell: () => onHeaderClick("status"),
       render: (status: OrderStatus) => {
         let additionalText = "";
-
+    
         if (status?.id === 2) additionalText = "(G)";
         else if (status?.id === 9) additionalText = "(Burgerprint)";
         else if (status?.id === 8) additionalText = "(Printway)";
-
+    
+        if (status?.id === 77) {
+          return (
+            <span className="text-red-600 font-semibold flex items-center gap-1">
+              <AlertTriangle size={16} className="text-red-500" />
+              Error
+            </span>
+          );
+        }
+    
         return (
           <span
             className="whitespace-nowrap font-semibold"
@@ -462,7 +510,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           </span>
         );
       },
-    },
+    }
+    ,
 
     
     

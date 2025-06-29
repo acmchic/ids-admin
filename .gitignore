@@ -43,3 +43,4 @@ __generated__
 # PWA
 workbox-*.js
 sw.js
+rest/public/logs/*
