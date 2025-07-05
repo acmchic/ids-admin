@@ -25,12 +25,24 @@ const AdminLayout: React.FC = ({ children }) => {
 
       <div className="flex flex-1 pt-20">
         <aside className="shadow w-42 xl:w-76 hidden lg:block overflow-y-auto bg-white px-4 fixed start-0 bottom-0 h-full pt-22">
+          <div className="flex items-center justify-center pb-6">
+            <a href={siteSettings.logo.href}>
+              <img
+                src={siteSettings.logo.url}
+                alt={siteSettings.logo.alt}
+                width={40}
+                height={40}
+              />
+            </a>
+          <span className=" font-bold text-gray-900">IDREAMSHIRT</span>
+
+          </div>
           <div className="flex flex-col space-y-6 py-3">
             <SidebarItemMap />
           </div>
         </aside>
         <main className="w-full lg:ps-40 xl:ps-76">
-          <div className="p-5 md:p-8 overflow-y-auto h-full">{children}123</div>
+          <div className="p-5 md:p-8 overflow-y-auto h-full">{children}</div>
         </main>
       </div>
     </div>

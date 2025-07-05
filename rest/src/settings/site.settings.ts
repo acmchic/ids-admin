@@ -12,10 +12,7 @@ export const siteSettings = {
     height: 40,
   },
   defaultLanguage: "en",
-  author: {
-    name: "RedQ, Inc.",
-    address: "11F, 54 Lieu Giai, Cong Vi, Ba Dinh, Ha Noi",
-  },
+ 
   headerLinks: [],
   authorizedLinks: [
     {
