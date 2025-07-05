@@ -5,7 +5,7 @@ export const siteSettings = {
   name: "IDreamShirt",
   description: "",
   logo: {
-    url: "/logo.svg",
+    url: "/logo.png",
     alt: "IDreamShirt",
     href: "/",
     width: 128,

@@ -26,6 +26,8 @@ export default function Orders() {
   const [limit, setLimit] = useState(200);
   const [filters, setFilters] = useState({ text: "", date: undefined, status: undefined });
   const [isTodayFilter, setIsTodayFilter] = useState(false);
+  const [isYesterdayFilter, setIsYesterdayFilter] = useState(false);
+
 
   const { data, isLoading, error } = useOrdersQuery({
     limit,
@@ -36,6 +38,7 @@ export default function Orders() {
   });
 
   const todayOrders = data?.orders?.data || [];
+  console.log("todayOrders ==> ", todayOrders);
   const totalTodayCount = todayOrders.length;
   const totalTodayAmount = todayOrders.reduce((sum, order) => sum + (Number(order.paid_total) || 0), 0);
 
@@ -51,6 +54,32 @@ export default function Orders() {
     setPage(current);
   };
 
+  const handleExportImageList = () => {
+    const imageList = [];
+
+    for (const order of todayOrders) {
+      for (const product of order.products || []) {
+        if (product.img_url) {
+          imageList.push({
+            order_id: order.id,
+            product_id: product.id,
+            img_url: product.img_url
+          });
+        }
+      }
+    }
+
+    const blob = new Blob([JSON.stringify(imageList, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "image_urls.json";
+    link.click();
+  };
+
+
+
   const handleTodayFilter = () => {
     const today = new Date();
     setSelectedDate(today);
@@ -62,6 +91,23 @@ export default function Orders() {
       status: onlyStatusOne ? 1 : undefined,
     }));
   };
+
+  const handleYesterdayFilter = () => {
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+  
+    setSelectedDate(yesterday);
+    setIsTodayFilter(false);
+    setIsYesterdayFilter(true);
+    setPage(1);
+    setFilters((prev) => ({
+      ...prev,
+      date: format(yesterday, "yyyy-MM-dd"),
+      status: onlyStatusOne ? 1 : undefined,
+    }));
+  };
+  
+
 
   const handleApplyFilter = () => {
     setPage(1);
@@ -82,6 +128,7 @@ export default function Orders() {
     navigator.clipboard.writeText(names);
     toast.success("All names copied!");
   };
+  
 
   return (
     <>
@@ -89,36 +136,53 @@ export default function Orders() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-lg font-semibold text-heading">{t("form:input-label-orders")}</h1>
           <div className="flex items-center gap-4">
-            <button
-              onClick={handleTodayFilter}
-              className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Today
-            </button>
+  <button
+    onClick={handleTodayFilter}
+    className="px-3 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+  >
+    Today
+  </button>
 
-            {isTodayFilter && (
-              <>
-                <button
-                  onClick={handleCopyAllNames}
-                  className="flex items-center gap-1 text-sm text-gray-700 hover:text-black"
-                  title="Copy all customer names"
-                >
-                  <ClipboardCopy className="w-4 h-4" />
-                  Copy All Names
-                </button>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <PackageCheck className="w-4 h-4 text-blue-600" />
-                  <span className="font-medium">{totalTodayCount} orders</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-700">
-                  <DollarSign className="w-4 h-4 text-green-600" />
-                  <span className="font-medium">
-                    ${totalTodayAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </>
-            )}
-          </div>
+  <button
+    onClick={handleYesterdayFilter}
+    className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600"
+  >
+    Yesterday
+  </button>
+
+  {(isTodayFilter || isYesterdayFilter) && (
+    <>
+      <button
+        onClick={handleCopyAllNames}
+        className="flex items-center gap-1 text-sm text-gray-700 hover:text-black"
+        title="Copy all customer names"
+      >
+        <ClipboardCopy className="w-4 h-4" />
+        Copy All Names
+      </button>
+      <button
+        onClick={handleExportImageList}
+        className="flex items-center gap-1 text-sm text-gray-700 hover:text-black"
+        title="Generate List IMG"
+      >
+        <ClipboardCopy className="w-4 h-4 rotate-180" />
+        Generate List IMG
+      </button>
+
+      <div className="flex items-center gap-2 text-sm text-gray-700">
+        <PackageCheck className="w-4 h-4 text-blue-600" />
+        <span className="font-medium">{totalTodayCount} orders</span>
+      </div>
+      <div className="flex items-center gap-2 text-sm text-gray-700">
+        <DollarSign className="w-4 h-4 text-green-600" />
+        <span className="font-medium">
+          ${totalTodayAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+        </span>
+      </div>
+    </>
+  )}
+</div>
+
         </div>
 
         <div className="flex flex-wrap gap-4 items-center justify-between">
@@ -161,19 +225,19 @@ export default function Orders() {
           </div>
 
           {todayOrders.some((o) => o.status?.id === 77) && (
-          <div className="w-full text-sm text-red-700 bg-red-100 border border-red-300 rounded p-3">
-            <strong>Errors:</strong>
-            <ul className="list-disc list-inside mt-1">
-              {todayOrders
-                .filter((o) => o.status?.id === 77)
-                .map((o) => (
-                  <li key={o.id}>
-                    {o.shipping_address?.shipping_name || "Unknown Customer"}
-                  </li>
-                ))}
-            </ul>
-          </div>
-        )}
+            <div className="w-full text-sm text-red-700 bg-red-100 border border-red-300 rounded p-3">
+              <strong>Errors:</strong>
+              <ul className="list-disc list-inside mt-1">
+                {todayOrders
+                  .filter((o) => o.status?.id === 77)
+                  .map((o) => (
+                    <li key={o.id}>
+                      {o.shipping_address?.shipping_name || "Unknown Customer"}
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
         </div>
       </Card>
 

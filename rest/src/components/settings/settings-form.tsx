@@ -43,6 +43,9 @@ type FormValues = {
 		title: string;
 		description: string;
 	};
+	stripe: {
+		apiKey: string;
+	  };
 	seo: {
 		metaTitle: string;
 		metaDescription: string;
@@ -125,6 +128,7 @@ export default function SettingsForm({
 		resolver: yupResolver(settingsValidationSchema),
 		defaultValues: {
 			...settings,
+			stripe: settings?.stripe ?? { apiKey: "" },
 			contactDetails: {
 				...settings?.contactDetails,
 				socials: settings?.contactDetails?.socials
@@ -294,6 +298,35 @@ export default function SettingsForm({
 					</div>
 				</Card>
 			</div>
+
+			<div className="flex flex-wrap pb-8 border-b border-dashed border-border-base my-5 sm:my-8">
+  <Description
+    title="Payment Settings (API)"
+    details="Please enter your Stripe API keys (both Publishable and Secret keys). This is required for payment gateway verification."
+    className="w-full px-0 sm:pe-4 md:pe-5 pb-5 sm:w-4/12 md:w-1/3 sm:py-8"
+  />
+
+  <Card className="w-full sm:w-8/12 md:w-2/3">
+    <Input
+      label="Stripe Publishable Key"
+      placeholder="pk_live_..."
+      {...register("stripe.publishableKey")}
+      variant="outline"
+      className="mb-5"
+    />
+
+    <Input
+      label="Stripe Secret Key"
+      placeholder="sk_live_..."
+      {...register("stripe.secretKey")}
+      variant="outline"
+      className="mb-5"
+      type="password"
+    />
+  </Card>
+</div>
+
+
 			<div className="flex flex-wrap pb-8 border-b border-dashed border-border-base my-5 sm:my-8">
 				<Description
 					title="SEO"

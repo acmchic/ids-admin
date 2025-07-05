@@ -154,6 +154,8 @@ export default function OrderDetailsPage() {
 				</h3>
 				<h4>{data?.order?.shipping_address && data.order.shipping_address.shipping_name}</h4>
 				<h4>{data?.order?.shipping_address && data.order.shipping_address.shipping_email}</h4>
+
+				
 			</div>
 
 
@@ -192,6 +194,32 @@ export default function OrderDetailsPage() {
 			</div>
 
 			<div className="mb-10">
+
+			{(data?.order?.tracking_number || data?.order?.tracking_url) && (
+  <div className="mb-4 p-4 border border-border-200 rounded bg-gray-50 space-y-2">
+    
+    {data?.order?.tracking_number && (
+      <p className="text-sm font-semibold text-gray-700 pb-6">
+        Order Transaction: <span className="text-blue-600">{data.order.tracking_number}</span>
+      </p>
+    )}
+
+    {data?.order?.tracking_url && (
+      <p className="text-sm font-semibold text-gray-700">
+        <a
+          href={data.order.tracking_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-blue-600 hover:underline break-all"
+        >
+          View Tracking detail: {data.order.tracking_url ?? data.order.tracking_url}
+        </a>
+      </p>
+    )}
+
+  </div>
+)}
+
 				{data?.order ? (
 					<Table
 						//@ts-ignore

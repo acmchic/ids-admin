@@ -30,7 +30,7 @@ const AdminLayout: React.FC = ({ children }) => {
           </div>
         </aside>
         <main className="w-full lg:ps-40 xl:ps-76">
-          <div className="p-5 md:p-8 overflow-y-auto h-full">{children}</div>
+          <div className="p-5 md:p-8 overflow-y-auto h-full">{children}123</div>
         </main>
       </div>
     </div>

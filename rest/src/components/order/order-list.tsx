@@ -510,9 +510,35 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           </span>
         );
       },
-    }
-    ,
+    },
 
+    {
+      title: "Tracking",
+      dataIndex: "tracking_number",
+      key: "tracking",
+      align: "center",
+      width: 200,
+      render: (_: any, row: any) => {
+        const trackingNumber = row.tracking_number || "No Tracking";
+        const trackingUrl = row.tracking_url || "";
+    
+        return (
+          <div className="flex flex-col items-center text-sm text-blue-600">
+            <p>{trackingNumber}</p>
+            {trackingUrl && (
+              <a
+                href={trackingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:underline text-xs text-blue-500 mt-1"
+              >
+                View Tracking
+              </a>
+            )}
+          </div>
+        );
+      },
+    },
     
     
     {

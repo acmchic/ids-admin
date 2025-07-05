@@ -662,6 +662,7 @@ export type SettingsOptions = {
   siteTitle?: Maybe<Scalars["String"]>;
   taxClass?: Maybe<Scalars["String"]>;
   signupPoints: Maybe<Scalars["Int"]>;
+  stripe?: Maybe<Scalars["String"]>;
 };
 
 export declare type LoginInput = {
