@@ -222,7 +222,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       key: "shipping_info",
       align: alignLeft,
       width: 150,
-      render: (shipping_address: UserAddress1) => {
+      render: (shipping_address: UserAddress1, record: any) => {
         const name = shipping_address.shipping_name || "";
         const street = shipping_address.shipping_address1 || "";
         const city = shipping_address.shipping_city || "";
@@ -242,6 +242,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           toast.success("COPIED");
         };
     
+        const orderCount = record.order_count || 1;
+        const orderLabel = orderCount === 1 ? "" : `${orderCount}th Order`;
+    
         return (
           <div className="text-sm text-blue-600 flex flex-col gap-8">
             <div>
@@ -252,16 +255,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               >
                 {name}
               </p>
+              <p className="text-xs text-gray-600 pt-1">{orderLabel}</p>
+    
               {shippingMethod === "express" && (
                 <p className="text-xs text-red-600 pt-6 font-semibold uppercase">Express Shipping</p>
               )}
+               {shipping_address.design_note && (
+        <p className="text-xs text-red-600 pt-2 font-semibold break-words">
+          📝 NOTES: {shipping_address.design_note.slice(0, 30)}{shipping_address.design_note.length > 30 ? '...' : ''}
+        </p>
+      )}
             </div>
     
             <Link
               href={googleMapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="hover:underline text-xs  text-black"
+              className="hover:underline text-xs text-black"
             >
               {stateFullName}
             </Link>
