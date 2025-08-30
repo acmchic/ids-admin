@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import Image from "next/dist/client/image";
@@ -95,11 +95,23 @@ const convertToAtworkUrl = (imgUrl: string): string =>
   imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
 
 
-const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
+const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps) => {
   const { data, paginatorInfo } = orders ?? {};
   const { t } = useTranslation();
   const router = useRouter();
   const { alignLeft } = useIsRTL();
+
+  // Function to check if order has customize artwork
+  const isCustomizeOrder = (record: any) => {
+    if (!record.products || !Array.isArray(record.products)) {
+      return false;
+    }
+    
+    return record.products.some((product: any) => {
+      const imgUrl = product.pivot?.img_url || product.img_url || '';
+      return imgUrl.includes('customize');
+    });
+  };
 
   const [loading, setLoading] = useState(false);
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
@@ -345,9 +357,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                     : product.name}
                 </p>
     
-                {/* Hiển thị side nếu có */}
+                {/* Hiển thị side và size */}
                 {side && (
-                  <p className="text-xs text-gray-500 pt-2">{side}</p>
+                  <p className="text-xs text-gray-500 pt-2">{side}/{size}</p>
                 )}
               </div>
             );
@@ -376,6 +388,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                   width={100}
                   height={100}
                   className="rounded-md"
+                  loading="lazy"
+                  placeholder="blur"
+                  blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
                 />
                 {match && (
                   <p className="pt-1">{match}</p>
@@ -387,13 +402,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       ),
     },
     
-    {
+        {
       title: "ATWORK",
       dataIndex: "products",
       key: "products",
       align: "center",
       width: 200,
-      render: (products: any[]) => (
+      render: (products: any[], record: any) => (
         <div className="flex flex-col">
           {products.map((product, index) => (
             <div
@@ -401,10 +416,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               className="mb-2 text-center relative group"
             >
               
-    
+
               <div className="inline-block transition-transform transform group-hover:scale-150 relative">
                 <a
-                  href={product.img_url}
+                  href={convertToAtworkUrl(product.pivot.img_url)}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -414,8 +429,57 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                     width={130}
                     height={150}
                     className="rounded-md object-cover"
+                    loading="lazy"
+                    placeholder="blur"
+                    blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
                   />
                 </a>
+              </div>
+              
+              {/* Display folder path */}
+              <div className="mt-1">
+                {(() => {
+                  // Extract path from original URL - only show last 2 segments
+                  const originalUrl = product.pivot.img_url;
+                  
+                  const urlParts = originalUrl.split('/');
+                  const mediaIndex = urlParts.findIndex(part => part === 'media');
+                  let imagePath = 'custom';
+                  if (mediaIndex !== -1 && mediaIndex + 1 < urlParts.length) {
+                    const pathParts = urlParts.slice(mediaIndex + 1, -1);
+                    // Only show last 2 segments of the path
+                    if (pathParts.length >= 2) {
+                      imagePath = pathParts.slice(-2).join('/');
+                    } else {
+                      imagePath = pathParts.join('/');
+                    }
+                  }
+                  
+                  // Check if path contains 'customize' for special styling
+                  const isCustomize = imagePath.toLowerCase().includes('customize');
+                  const isIdsGmc = imagePath.includes('ids/gmc');
+                  
+                  // Determine text color and effects
+                  let textClass = 'text-xs font-mono';
+                  if (isCustomize) {
+                    textClass += ' text-red-500 font-bold animate-pulse';
+                  } else if (isIdsGmc) {
+                    textClass += ' text-red-500';
+                  } else {
+                    textClass += ' text-gray-600';
+                  }
+                  
+                  return (
+                    <a
+                      href={convertToAtworkUrl(product.pivot.img_url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`${textClass} hover:underline cursor-pointer`}
+                    >
+                      {isCustomize ? imagePath.toUpperCase() : imagePath}
+                    </a>
+                  );
+                })()}
               </div>
             </div>
           ))}
@@ -557,7 +621,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       key: "actions",
       align: "center",
       width: 200,
-      render: (id: string, status: string) => {
+      render: (id: string, status: string, row: any) => {
         if (!id) return null;
     
         const handleFulfill = async () => {
@@ -602,6 +666,14 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
             <div className="flex flex-col items-center gap-2">
+              {/* CUSTOMIZE Badge */}
+              {isCustomizeOrder(row) && (
+                <div className="mb-2">
+                  <span className="inline-block bg-pink-500 text-white text-xs font-bold px-3 py-1 rounded animate-pulse">
+                    CUSTOMIZE
+                  </span>
+                </div>
+              )}
               {/* Fulfill Button */}
               
               <button
@@ -672,6 +744,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           rowKey="id"
           scroll={{ x: 1000 }}
           expandable={{ expandIconColumnIndex: -1 }}
+          rowClassName={(record) => {
+            return isCustomizeOrder(record) ? 'bg-pink-100 hover:bg-pink-200' : '';
+          }}
         />
       </div>
 
@@ -688,6 +763,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     </>
   );
 
-};
+});
 
 export default OrderList;

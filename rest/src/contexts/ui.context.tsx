@@ -2,6 +2,7 @@ import React, { FC, useMemo } from "react";
 
 export interface State {
   displaySidebar: boolean;
+  displayDesktopSidebar: boolean;
   displayModal: boolean;
   modalData: any;
   modalView: string;
@@ -9,6 +10,7 @@ export interface State {
 
 const initialState = {
   displaySidebar: false,
+  displayDesktopSidebar: false,
   displayModal: false,
   modalView: "LOGIN_VIEW",
   modalData: null,
@@ -20,6 +22,9 @@ type Action =
     }
   | {
       type: "CLOSE_SIDEBAR";
+    }
+  | {
+      type: "TOGGLE_DESKTOP_SIDEBAR";
     }
   | {
       type: "OPEN_MODAL";
@@ -62,6 +67,12 @@ function uiReducer(state: State, action: Action) {
         displaySidebar: false,
       };
     }
+    case "TOGGLE_DESKTOP_SIDEBAR": {
+      return {
+        ...state,
+        displayDesktopSidebar: !state.displayDesktopSidebar,
+      };
+    }
     case "OPEN_MODAL": {
       return {
         ...state,
@@ -100,6 +111,7 @@ export const UIProvider: FC = (props) => {
       : dispatch({ type: "OPEN_SIDEBAR" });
   const closeSidebarIfPresent = () =>
     state.displaySidebar && dispatch({ type: "CLOSE_SIDEBAR" });
+  const toggleDesktopSidebar = () => dispatch({ type: "TOGGLE_DESKTOP_SIDEBAR" });
 
   const openModal = () => dispatch({ type: "OPEN_MODAL" });
   const closeModal = () => dispatch({ type: "CLOSE_MODAL" });
@@ -116,6 +128,7 @@ export const UIProvider: FC = (props) => {
       closeSidebar,
       toggleSidebar,
       closeSidebarIfPresent,
+      toggleDesktopSidebar,
       openModal,
       closeModal,
       setModalView,

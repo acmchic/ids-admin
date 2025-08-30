@@ -4,18 +4,21 @@ import * as sidebarIcons from "@components/icons/sidebar";
 import { useUI } from "@contexts/ui.context";
 
 const SidebarItem = ({ href, icon, label }: any) => {
-  const { closeSidebar } = useUI();
+  const { closeSidebar, displayDesktopSidebar } = useUI();
   return (
     <Link
       href={href}
       className="flex w-full items-center text-base text-body-dark text-start focus:text-accent"
+      title={!displayDesktopSidebar ? label : undefined}
     >
       {getIcon({
         iconList: sidebarIcons,
         iconName: icon,
-        className: "w-5 h-5 me-4",
+        className: `w-5 h-5 ${displayDesktopSidebar ? 'me-4' : 'mx-auto'}`,
       })}
-      <span onClick={() => closeSidebar()}>{label}</span>
+      {displayDesktopSidebar && (
+        <span onClick={() => closeSidebar()}>{label}</span>
+      )}
     </Link>
   );
 };

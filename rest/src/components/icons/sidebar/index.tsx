@@ -15,3 +15,4 @@ export { UsersIcon } from "@components/icons/sidebar/users";
 export { ShippingsIcon } from "@components/icons/sidebar/shippings";
 export { WithdrawIcon } from "@components/icons/sidebar/withdraw";
 export { TaxesIcon } from "@components/icons/sidebar/taxes";
+export { default as ToggleIcon } from "@components/icons/sidebar/toggle";

@@ -15,7 +15,7 @@ export const getServerSideProps: GetServerSideProps = async ({
   if (cookies?.auth_token) {
     if (cookies?.auth_permissions?.includes(SUPER_ADMIN)) {
       return {
-        redirect: { destination: ROUTES.DASHBOARD, permanent: false },
+        redirect: { destination: ROUTES.ORDERS, permanent: false },
       };
     }
   }

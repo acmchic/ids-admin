@@ -58,7 +58,7 @@ const LoginForm = () => {
 					if (data?.token) {
 						if (hasAccess(allowedRoles, data?.permissions)) {
 							setAuthCredentials(data?.token, data?.permissions);
-							router.push(ROUTES.DASHBOARD);
+							router.push(ROUTES.ORDERS);
 							return;
 						}
 						setErrorMsg("form:error-enough-permission");

@@ -20,6 +20,8 @@ import { useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import SelectInput from "@components/ui/select-input";
 import { useIsRTL } from "@utils/locals";
+import UploadImageButton from "@components/ui/upload-image-button";
+import { toast } from "react-toastify";
 
 type FormValues = {
 	order_status: any;
@@ -93,14 +95,41 @@ export default function OrderDetailsPage() {
 			dataIndex: "pivot.img_url",
 			key: "pivot.img_url",
 			width: 70,
-			render: (_: any, item: any) => (
-				<Image
-					src={item.pivot.img_url ?? siteSettings.product.placeholder}
-					layout="fixed"
-					width={150}
-					height={150}
-				/>
-			),
+			render: (_: any, item: any) => {
+				// Extract path and filename from img_url
+				const imgUrl = item.img_url || item.pivot.img_url;
+				const urlParts = imgUrl.split('/');
+				const fileName = urlParts[urlParts.length - 1];
+				
+				// Extract path from URL (after /images/)
+				const imagesIndex = urlParts.findIndex(part => part === 'images');
+				let imagePath = 'custom';
+				if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
+					const pathParts = urlParts.slice(imagesIndex + 1, -1);
+					imagePath = pathParts.join('/');
+				}
+
+				return (
+					<div className="flex flex-col items-center gap-2">
+						<Image
+							src={item.pivot.img_url ?? siteSettings.product.placeholder}
+							layout="fixed"
+							width={150}
+							height={150}
+						/>
+						<UploadImageButton
+							imagePath={imagePath}
+							fileName={fileName}
+							originalImageUrl={imgUrl}
+							onUploadSuccess={() => {
+								toast.success('Upload thành công!');
+								// Refresh page after successful upload
+								window.location.reload();
+							}}
+						/>
+					</div>
+				);
+			},
 		},
 		{
 			title: t("table:table-item-products"),

@@ -63,7 +63,7 @@ const RegistrationForm = () => {
 					if (data?.token) {
 						if (hasAccess(allowedRoles, data?.permissions)) {
 							setAuthCredentials(data?.token, data?.permissions);
-							router.push(ROUTES.DASHBOARD);
+							router.push(ROUTES.ORDERS);
 							return;
 						}
 						setErrorMessage("form:error-enough-permission");
