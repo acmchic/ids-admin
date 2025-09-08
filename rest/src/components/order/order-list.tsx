@@ -419,12 +419,12 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
               <div className="inline-block transition-transform transform group-hover:scale-150 relative">
                 <a
-                  href={`${convertToAtworkUrl(product.pivot.img_url)}?t=${Date.now()}`}
+                  href={`${product.img_url}`}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <Image
-                    src={`${convertToAtworkUrl(product.pivot.img_url)}?t=${Date.now()}`}
+                    src={`${convertToAtworkUrl(product.pivot.img_url)}}`}
                     alt={product.name}
                     width={130}
                     height={150}
