@@ -403,87 +403,75 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     },
     
         {
-      title: "ATWORK",
-      dataIndex: "products",
-      key: "products",
-      align: "center",
-      width: 200,
-      render: (products: any[], record: any) => (
-        <div className="flex flex-col">
-          {products.map((product, index) => (
-            <div
-              key={`${product.id}-${index}`}
-              className="mb-2 text-center relative group"
-            >
-              
+  title: "ATWORK",
+  dataIndex: "products",
+  key: "products",
+  align: "center",
+  width: 200,
+  render: (products: any[] = []) => (
+    <div className="flex flex-col">
+      {products.map((product, index) => {
+        const imgUrl = product?.img_url || "/placeholder.svg"; // fallback
+        const originalUrl = product?.pivot?.img_url || "";
+        const urlParts = originalUrl.split("/");
+        const mediaIndex = urlParts.findIndex((part) => part === "media");
 
-              <div className="inline-block transition-transform transform group-hover:scale-150 relative">
-                <a
-                  href={product?.img_url || ''}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  <Image
-                    src={product?.img_url || ''}
-                    alt={product.name}
-                    width={130}
-                    height={150}
-                    className="rounded-md object-cover"
-                    loading="lazy"
-                  />
-                </a>
-              </div>
-              
-              {/* Display folder path */}
-              <div className="mt-1">
-                {(() => {
-                  // Extract path from original URL - only show last 2 segments
-                  const originalUrl = product.pivot.img_url;
-                  
-                  const urlParts = originalUrl.split('/');
-                  const mediaIndex = urlParts.findIndex(part => part === 'media');
-                  let imagePath = 'custom';
-                  if (mediaIndex !== -1 && mediaIndex + 1 < urlParts.length) {
-                    const pathParts = urlParts.slice(mediaIndex + 1, -1);
-                    // Only show last 2 segments of the path
-                    if (pathParts.length >= 2) {
-                      imagePath = pathParts.slice(-2).join('/');
-                    } else {
-                      imagePath = pathParts.join('/');
-                    }
-                  }
-                  
-                  // Check if path contains 'customize' for special styling
-                  const isCustomize = imagePath.toLowerCase().includes('customize');
-                  const isIdsGmc = imagePath.includes('ids/gmc');
-                  
-                  // Determine text color and effects
-                  let textClass = 'text-xs font-mono';
-                  if (isCustomize) {
-                    textClass += ' text-red-500 font-bold animate-pulse';
-                  } else if (isIdsGmc) {
-                    textClass += ' text-red-500';
-                  } else {
-                    textClass += ' text-gray-600';
-                  }
-                  
-                  return (
-                    <a
-                      href={product?.img_url || ''}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`${textClass} hover:underline cursor-pointer`}
-                    >
-                      {isCustomize ? imagePath.toUpperCase() : imagePath}
-                    </a>
-                  );
-                })()}
-              </div>
+        let imagePath = "custom";
+        if (mediaIndex !== -1 && mediaIndex + 1 < urlParts.length) {
+          const pathParts = urlParts.slice(mediaIndex + 1, -1);
+          imagePath =
+            pathParts.length >= 2
+              ? pathParts.slice(-2).join("/")
+              : pathParts.join("/");
+        }
+
+        const isCustomize = imagePath.toLowerCase().includes("customize");
+        const isIdsGmc = imagePath.includes("ids/gmc");
+
+        let textClass = "text-xs font-mono";
+        if (isCustomize) {
+          textClass += " text-red-500 font-bold animate-pulse";
+        } else if (isIdsGmc) {
+          textClass += " text-red-500";
+        } else {
+          textClass += " text-gray-600";
+        }
+
+        return (
+          <div
+            key={`${product?.id || "p"}-${index}`}
+            className="mb-2 text-center relative group"
+          >
+            <div className="inline-block transition-transform transform group-hover:scale-150 relative">
+              <a href={imgUrl} target="_blank" rel="noopener noreferrer">
+                <Image
+                  src={imgUrl}
+                  alt={product?.name || "product"}
+                  width={130}
+                  height={150}
+                  className="rounded-md object-cover"
+                  loading="lazy"
+                />
+              </a>
             </div>
-          ))}
-        </div>
-      ),
-    },
+
+            <div className="mt-1">
+              <a
+                href={imgUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${textClass} hover:underline cursor-pointer`}
+              >
+                {isCustomize ? imagePath.toUpperCase() : imagePath}
+              </a>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ),
+}
+,
     
     
 
