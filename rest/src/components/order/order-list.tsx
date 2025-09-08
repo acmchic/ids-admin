@@ -419,19 +419,17 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
               <div className="inline-block transition-transform transform group-hover:scale-150 relative">
                 <a
-                  href={`${product.img_url}`}
+                  href={product.img_url}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <Image
-                    src={`${convertToAtworkUrl(product.pivot.img_url)}}`}
+                    src={product.img_url}
                     alt={product.name}
                     width={130}
                     height={150}
                     className="rounded-md object-cover"
                     loading="lazy"
-                    placeholder="blur"
-                    blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
                   />
                 </a>
               </div>
@@ -471,7 +469,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                   
                   return (
                     <a
-                      href={`${convertToAtworkUrl(product.pivot.img_url)}?t=${Date.now()}`}
+                      href={product.img_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`${textClass} hover:underline cursor-pointer`}
