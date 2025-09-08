@@ -419,12 +419,12 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
               <div className="inline-block transition-transform transform group-hover:scale-150 relative">
                 <a
-                  href={product.img_url}
+                  href={product?.img_url || ''}
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   <Image
-                    src={product.img_url}
+                    src={product?.img_url || ''}
                     alt={product.name}
                     width={130}
                     height={150}
@@ -469,7 +469,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                   
                   return (
                     <a
-                      href={product.img_url}
+                      href={product?.img_url || ''}
                       target="_blank"
                       rel="noopener noreferrer"
                       className={`${textClass} hover:underline cursor-pointer`}
