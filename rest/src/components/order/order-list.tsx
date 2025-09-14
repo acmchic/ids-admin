@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import Image from "next/dist/client/image";
@@ -103,20 +103,32 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
   // Function to check if order has customize artwork
   const isCustomizeOrder = (record: any) => {
-    if (!record.products || !Array.isArray(record.products)) {
-      return false;
-    }
-    
+    if (!record.products || !Array.isArray(record.products)) return false
+  
     return record.products.some((product: any) => {
-      const imgUrl = product.pivot?.img_url || product.img_url || '';
-      return imgUrl.includes('customize');
-    });
-  };
-
-  const [loading, setLoading] = useState(false);
+      if (product.is_customize && product.image) {
+        try {
+          const images = JSON.parse(product.image)
+          if (images.length && images[0].original) {
+            return images[0].original.toLowerCase().includes("customize")
+          }
+        } catch {
+          return false
+        }
+        return false
+      } else {
+        const imgUrl = product.pivot?.img_url || product.img_url || ""
+        return imgUrl.toLowerCase().includes("customize")
+      }
+    })
+  }
+  
+  
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const [selectedOrders, setSelectedOrders] = useState<Record<string, number>>({});
-  const [sortingObj, setSortingObj] = useState({ sort: SortOrder.Desc, column: null });
+  const [sortingObj, setSortingObj] = useState<{ sort: SortOrder; column: string | null }>({ sort: SortOrder.Desc, column: null });
+  const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   const onHeaderClick = (column: string | null) => ({
     onClick: () => {
@@ -130,11 +142,11 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
   });
 
   const handleUnifiedFulfill = async () => {
-    setLoading(true);
+    setLoadingRows(prev => ({ ...prev, 'unified': true }));
     toast.info("Processing fulfill...!!");
-  
+
     const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
-  
+
     try {
       const grouped: Record<number, any[]> = {};
       data?.forEach(order => {
@@ -144,10 +156,10 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           grouped[status].push(order);
         }
       });
-  
+
       for (const status of Object.keys(grouped)) {
         const ordersForStatus = grouped[+status];
-  
+
         for (const order of ordersForStatus) {
           try {
             await axios.put(`https://orders.idreamshirt.com/orders/${order.id}`, {
@@ -156,19 +168,19 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             await logFulfilledOrders([order], +status);
           } catch (err: any) {
             console.error(`❌ Failed to fulfill order ${order.id}`, err);
-          
+
             const errMsg =
               err?.response?.data?.message ||
               err?.message ||
               "Unknown error";
-          
+
             await logFulfilledOrdersError([order], +status, errMsg);
           }
-  
+
           await sleep(500);
         }
       }
-  
+
       toast.success("All selected orders fulfilled.");
       setSelectedOrders({});
       router.reload();
@@ -176,10 +188,101 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       console.error(e);
       toast.error("Some fulfillments failed.");
     } finally {
-      setLoading(false);
+      setLoadingRows(prev => ({ ...prev, 'unified': false }));
     }
   };
-  
+
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, productId: string, imagePath: string, fileName: string) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Vui lòng chọn file ảnh');
+      return;
+    }
+
+    // Validate file size (max 25MB)
+    if (file.size > 25 * 1024 * 1024) {
+      toast.error('Kích thước file phải nhỏ hơn 25MB');
+      return;
+    }
+
+    const uploadKey = `${productId}-image`;
+    setUploadingImages(prev => ({ ...prev, [uploadKey]: true }));
+
+    // Fallback timeout to reset button state if upload hangs
+    const fallbackTimeout = setTimeout(() => {
+      setUploadingImages(prev => ({ ...prev, [uploadKey]: false }));
+      if (fileInputRefs.current[uploadKey]) {
+        fileInputRefs.current[uploadKey]!.value = '';
+      }
+      toast.error('Upload timeout. Vui lòng thử lại.');
+    }, 35000);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('path', imagePath);
+      formData.append('fileName', fileName);
+
+      console.log('🔥 ORDER LIST UPLOAD DEBUG:', {
+        productId,
+        imagePath,
+        fileName,
+        fileSize: file.size,
+        fileType: file.type
+      });
+
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const text = await response.text();
+        console.error('Non-JSON response:', text);
+        throw new Error(`Server returned non-JSON response: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+
+      console.log('🔥 ORDER LIST UPLOAD RESPONSE:', {
+        status: response.status,
+        ok: response.ok,
+        result
+      });
+
+      if (response.ok) {
+        if (result.isReplacing) {
+          toast.success('Upload thành công! Đã thay thế ảnh artwork.');
+          console.log('✅ Replaced existing file:', fileName);
+        } else {
+          toast.success(`Upload thành công! File ảnh khác tên - đã upload với tên mới: ${result.finalFileName}`);
+          console.log('✅ Uploaded new file:', result.finalFileName);
+        }
+        // Không reload trang, chỉ show thông báo thành công
+      } else {
+        console.error('❌ Upload failed:', result);
+        toast.error(`Upload thất bại: ${result.error || result.details || 'Lỗi không xác định'}`);
+      }
+    } catch (error) {
+      console.error('Upload error:', error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        toast.error('Lỗi mạng. Vui lòng kiểm tra kết nối và thử lại.');
+      } else {
+        toast.error('Upload thất bại. Vui lòng thử lại.');
+      }
+    } finally {
+      clearTimeout(fallbackTimeout);
+      setUploadingImages(prev => ({ ...prev, [uploadKey]: false }));
+      if (fileInputRefs.current[uploadKey]) {
+        fileInputRefs.current[uploadKey]!.value = '';
+      }
+    }
+  };
+
 
   const columns = [
     {
@@ -196,15 +299,15 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           const variantName = nameToSlug(variant?.name || "");
           return variantName.includes("classic-t-shirt");
         });
-    
+
         const fulfillments = hasClassicTee
           ? [
             { label: "G", value: 2, color: "blue" },
-              { label: "B_F", value: 12, color: "red" },
-              { label: "B_G", value: 11, color: "red" },
-            ]
-          : [{ label: "G", value: 2, color: "blue" },{ label: "B", value: 9, color: "red" }];
-    
+            { label: "B_F", value: 12, color: "red" },
+            { label: "B_G", value: 11, color: "red" },
+          ]
+          : [{ label: "G", value: 2, color: "blue" }, { label: "B", value: 9, color: "red" }];
+
         return (
           <div className="flex flex-row justify-center gap-3">
             {fulfillments.map(ff => (
@@ -213,11 +316,10 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 onClick={() =>
                   setSelectedOrders(prev => ({ ...prev, [row.id]: ff.value }))
                 }
-                className={`px-3 py-2 rounded-md border text-white bg-${ff.color}-500 hover:bg-${ff.color}-600 text-sm ${
-                  selectedOrders[row.id] === ff.value
+                className={`px-3 py-2 rounded-md border text-white bg-${ff.color}-500 hover:bg-${ff.color}-600 text-sm ${selectedOrders[row.id] === ff.value
                     ? 'ring-2 ring-offset-1 ring-' + ff.color + '-300'
                     : ''
-                }`}
+                  }`}
               >
                 {ff.label}
               </button>
@@ -227,7 +329,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       },
     }
     ,
-    
+
     {
       title: "Customer",
       dataIndex: "shipping_address",
@@ -241,22 +343,22 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         const provinceCode = shipping_address.shipping_province_code || "";
         const zipcode = shipping_address.shipping_zipcode || "";
         const shippingMethod = shipping_address.shipping_method || "standard";
-    
+
         const stateNames = UsState();
         const stateFullName = stateNames[provinceCode as keyof typeof stateNames] || provinceCode;
-    
+
         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
           `${street}, ${city}, ${zipcode}, ${stateFullName} (US)`
         )}`;
-    
+
         const handleCopy = () => {
           navigator.clipboard.writeText(name);
           toast.success("COPIED");
         };
-    
+
         const orderCount = record.order_count || 1;
         const orderLabel = orderCount === 1 ? "" : `${orderCount}th Order`;
-    
+
         return (
           <div className="text-sm text-blue-600 flex flex-col gap-8">
             <div>
@@ -268,17 +370,17 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 {name}
               </p>
               <p className="text-xs text-gray-600 pt-1">{orderLabel}</p>
-    
+
               {shippingMethod === "express" && (
                 <p className="text-xs text-red-600 pt-6 font-semibold uppercase">Express Shipping</p>
               )}
-               {shipping_address.design_note && (
-        <p className="text-xs text-red-600 pt-2 font-semibold break-words">
-          📝 NOTES: {shipping_address.design_note.slice(0, 30)}{shipping_address.design_note.length > 30 ? '...' : ''}
-        </p>
-      )}
+              {shipping_address.design_note && (
+                <p className="text-xs text-red-600 pt-2 font-semibold break-words">
+                  📝 NOTES: {shipping_address.design_note.slice(0, 30)}{shipping_address.design_note.length > 30 ? '...' : ''}
+                </p>
+              )}
             </div>
-    
+
             <Link
               href={googleMapsUrl}
               target="_blank"
@@ -301,12 +403,12 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         <div className="flex flex-col gap-2">
           {products.map((product, index) => (
             <div key={`${product.id}-${index}`} className="mb-2 text-center">
-             <p>{product.id}</p>
+              <p>{product.id}</p>
               {product.image?.original && (
                 <p
-                className={`mt-1 text-md ${product.id > 104585 ? "text-red-500" : ""
-                  }`}
-              >
+                  className={`mt-1 text-md ${product.id > 104585 ? "text-red-500" : ""
+                    }`}
+                >
                   {product.image.original.split("/").slice(0, 2).join("/")}
                 </p>
               )}
@@ -315,7 +417,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         </div>
       ),
     },
-    
+
 
     {
       title: "Name",
@@ -329,19 +431,19 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             const variant = product.pivot?.variation
               ? JSON.parse(product.pivot.variation)
               : null;
-    
+
             const variantName = nameToSlug(variant?.name ?? "");
             const color = nameToSlug(variant?.color ?? "");
             const size = nameToSlug(variant?.size ?? "");
             const side = variant?.side ?? "";
-    
+
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
                 {/* Hiển thị impress & click */}
                 <p className="text-xs text-gray-700">
                   Imp: {product.impressions ?? 0} | Click: {product.clicks ?? 0}
                 </p>
-    
+
                 {/* Tên sản phẩm (có link) */}
                 <p
                   className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
@@ -356,7 +458,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                     ? `${product.name.slice(0, 20)}...`
                     : product.name}
                 </p>
-    
+
                 {/* Hiển thị side và size */}
                 {side && (
                   <p className="text-xs text-gray-500 pt-2">{side}/{size}</p>
@@ -379,7 +481,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           {products.map((product, index) => {
             const imgUrl = product.pivot?.img_url || "";
             const match = imgUrl.split("/media/")[1]?.split("/")[0] || "";
-    
+
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
                 <Image
@@ -401,93 +503,169 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         </div>
       ),
     },
-    
-        {
+
+    {
       title: "ATWORK",
       dataIndex: "products",
       key: "products",
       align: "center",
       width: 200,
-      render: (products: any[], record: any) => (
+      render: (products: any[]) => (
         <div className="flex flex-col">
-          {products.map((product, index) => (
-            <div
-              key={`${product.id}-${index}`}
-              className="mb-2 text-center relative group"
-            >
-              
+          {products.map((product, index) => {
+            
+            const displayImgUrl = product.pivot?.img_url || product.img_url;
+            function getImageFolderPath(url?: string): string {
+              if (!url) return "CUSTOMIZE"
+              const afterImages = url.split("images/")[1] || ""
+              const pathParts = afterImages.split("/")
+              return pathParts.slice(0, 2).join("/")
+            }
 
-              <div className="inline-block transition-transform transform group-hover:scale-150 relative">
-                <a
-                  href={`${convertToAtworkUrl(product.pivot.img_url)}?t=${Date.now()}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+            const linkUrl = product?.img_url || ""
+            
+            const folderPath = getImageFolderPath(linkUrl)
+
+
+            if (!displayImgUrl) {
+              return (
+                <div
+                  key={`${product.id}-${index}`}
+                  className="mb-2 text-center"
                 >
-                  <Image
-                    src={`${convertToAtworkUrl(product.pivot.img_url)}?t=${Date.now()}`}
-                    alt={product.name}
-                    width={130}
-                    height={150}
-                    className="rounded-md object-cover"
-                    loading="lazy"
-                    placeholder="blur"
-                    blurDataURL="data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAYEBQYFBAYGBQYHBwYIChAKCgkJChQODwwQFxQYGBcUFhYaHSUfGhsjHBYWICwgIyYnKSopGR8tMC0oMCUoKSj/2wBDAQcHBwoIChMKChMoGhYaKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCgoKCj/wAARCAAIAAoDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAv/xAAhEAACAQMDBQAAAAAAAAAAAAABAgMABAUGIWGRkqGx0f/EABUBAQEAAAAAAAAAAAAAAAAAAAMF/8QAGhEAAgIDAAAAAAAAAAAAAAAAAAECEgMRkf/aAAwDAQACEQMRAD8AltJagyeH0AthI5xdrLcNM91BF5pX2HaH9bcfaSXWGaRmknyJckliyjqTzSlT54b6bk+h0R//2Q=="
-                  />
-                </a>
-              </div>
-              
-              {/* Display folder path */}
-              <div className="mt-1">
+                  <div className="w-[130px] h-[150px] bg-gray-200 rounded-md flex items-center justify-center text-gray-500 text-xs">
+                    No Image
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={`${product.id}-${index}`}
+                className="mb-2 text-center"
+              >
+                <div className="inline-block transition-transform transform hover:scale-150 relative">
+                  <a
+                    href={linkUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <Image
+                      src={convertToAtworkUrl(product.pivot.img_url)}
+                      alt={product.name || 'Product image'}
+                      width={130}
+                      height={150}
+                      className="rounded-md object-cover"
+                    />
+                  </a>
+                </div>
+
+                {/* Upload Button - Moved below image */}
                 {(() => {
-                  // Extract path from original URL - only show last 2 segments
-                  const originalUrl = product.pivot.img_url;
+                  // Use same logic as detail page: img_url first, then pivot.img_url
+                  const imgUrl = product.img_url || product.pivot?.img_url;
+                  const urlParts = imgUrl.split('/');
+                  const fileName = urlParts[urlParts.length - 1];
                   
-                  const urlParts = originalUrl.split('/');
-                  const mediaIndex = urlParts.findIndex(part => part === 'media');
+                  // Extract path from URL (after /images/) - same logic as detail page
+                  const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
                   let imagePath = 'custom';
-                  if (mediaIndex !== -1 && mediaIndex + 1 < urlParts.length) {
-                    const pathParts = urlParts.slice(mediaIndex + 1, -1);
-                    // Only show last 2 segments of the path
-                    if (pathParts.length >= 2) {
-                      imagePath = pathParts.slice(-2).join('/');
-                    } else {
-                      imagePath = pathParts.join('/');
-                    }
+                  if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
+                    const pathParts = urlParts.slice(imagesIndex + 1, -1);
+                    imagePath = pathParts.join('/');
                   }
-                  
-                  // Check if path contains 'customize' for special styling
-                  const isCustomize = imagePath.toLowerCase().includes('customize');
-                  const isIdsGmc = imagePath.includes('ids/gmc');
-                  
-                  // Determine text color and effects
-                  let textClass = 'text-xs font-mono';
-                  if (isCustomize) {
-                    textClass += ' text-red-500 font-bold animate-pulse';
-                  } else if (isIdsGmc) {
-                    textClass += ' text-red-500';
-                  } else {
-                    textClass += ' text-gray-600';
-                  }
-                  
+
+                  const uploadKey = `${product.id}-image`;
+                  const isUploading = uploadingImages[uploadKey];
+
                   return (
-                    <a
-                      href={`${convertToAtworkUrl(product.pivot.img_url)}?t=${Date.now()}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`${textClass} hover:underline cursor-pointer`}
-                    >
-                      {isCustomize ? imagePath.toUpperCase() : imagePath}
-                    </a>
+                    <div className="mt-2 flex justify-center">
+                      <input
+                        ref={(el) => {
+                          fileInputRefs.current[uploadKey] = el;
+                        }}
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleImageUpload(e, product.id.toString(), imagePath, fileName)}
+                        className="hidden"
+                      />
+                      <button
+                        onClick={() => fileInputRefs.current[uploadKey]?.click()}
+                        disabled={isUploading}
+                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
+                        title="Upload new artwork image"
+                      >
+                        {isUploading ? (
+                          <span className="w-3 h-3 animate-spin">⏳</span>
+                        ) : (
+                          <span className="w-3 h-3">📤</span>
+                        )}
+                        {isUploading ? 'Up...' : 'Up'}
+                      </button>
+                    </div>
                   );
                 })()}
+
+                <p
+                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize")
+                        ? "text-blue-500 font-bold animate-pulse"
+                        : "text-gray-600"
+                      }`}
+                  >
+                    {folderPath.toLowerCase().includes("customize")
+                      ? folderPath.toUpperCase()
+                      : folderPath}
+                  </p>
+
+                {/* Display image path */}
+                <div className="mt-1">
+                  {(() => {
+                    // Lấy path từ URL gốc để hiển thị
+                    const originalUrl = product.pivot?.img_url || product.img_url;
+                    if (!originalUrl) return null;
+
+                    const urlParts = originalUrl.split("/");
+                    const imagesIndex = urlParts.findIndex((part: string) => part === "images");
+                    let imagePath = "";
+
+                    if (imagesIndex !== -1 && imagesIndex + 2 < urlParts.length) {
+                      // Lấy 2 phần sau "images" (ví dụ: w_shirt/tv)
+                      imagePath = urlParts.slice(imagesIndex + 1, imagesIndex + 3).join("/");
+                    }
+
+                    if (!imagePath) return null;
+
+                    const isCustomize = imagePath.toLowerCase().includes("customize");
+
+                    let textClass = "text-xs font-mono";
+                    if (isCustomize) {
+                      textClass += " text-green-500 font-bold animate-pulse";
+                    } else {
+                      textClass += " text-gray-600";
+                    }
+
+                    return (
+                      <a
+                        href={linkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={`${textClass} hover:underline cursor-pointer`}
+                      >
+                        {isCustomize ? imagePath.toUpperCase() : imagePath}
+                      </a>
+                    );
+                  })()}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ),
-    },
-    
-    
+    }
+    ,
+
+
 
     {
       title: (
@@ -561,12 +739,12 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       onHeaderCell: () => onHeaderClick("status"),
       render: (status: OrderStatus) => {
         let additionalText = "";
-    
-        if (status?.id === 2) additionalText = "(G)";
-        else if (status?.id === 9) additionalText = "(Burgerprint)";
-        else if (status?.id === 8) additionalText = "(Printway)";
-    
-        if (status?.id === 77) {
+
+        if (status?.id == 2) additionalText = "(G)";
+        else if (status?.id == 9) additionalText = "(Burgerprint)";
+        else if (status?.id == 8) additionalText = "(Printway)";
+
+        if (status?.id == 77) {
           return (
             <span className="text-red-600 font-semibold flex items-center gap-1">
               <AlertTriangle size={16} className="text-red-500" />
@@ -574,7 +752,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             </span>
           );
         }
-    
+
         return (
           <span
             className="whitespace-nowrap font-semibold"
@@ -595,7 +773,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       render: (_: any, row: any) => {
         const trackingNumber = row.tracking_number || "No Tracking";
         const trackingUrl = row.tracking_url || "";
-    
+
         return (
           <div className="flex flex-col items-center text-sm text-blue-600">
             <p>{trackingNumber}</p>
@@ -613,20 +791,20 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         );
       },
     },
-    
-    
+
+
     {
       title: t("table:table-item-actions"),
       dataIndex: "id",
       key: "actions",
       align: "center",
       width: 200,
-      render: (id: string, status: string, row: any) => {
+      render: (id: string, _: string, row: any) => {
         if (!id) return null;
-    
+
         const handleFulfill = async () => {
           setLoadingRows((prev) => ({ ...prev, [id]: true }));
-    
+
           try {
             await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 2 });
             toast.success("Order fulfilled successfully!");
@@ -636,10 +814,10 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             setLoadingRows((prev) => ({ ...prev, [id]: false }));
           }
         };
-    
+
         const handleBurger = async () => {
           setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: true }));
-    
+
           try {
             await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 9 });
             toast.success("Burger order fulfilled successfully!");
@@ -651,7 +829,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         };
         const handleMerchize = async () => {
           setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: true }));
-    
+
           try {
             await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 68 });
             toast.success("Merchize order fulfilled successfully!");
@@ -661,7 +839,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: false }));
           }
         };
-    
+
         return (
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
@@ -675,7 +853,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 </div>
               )}
               {/* Fulfill Button */}
-              
+
               <button
                 onClick={handleMerchize}
                 disabled={loadingRows[`merchize-${id}`]}
@@ -719,7 +897,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         );
       },
     }
-    
+
   ];
 
   return (
