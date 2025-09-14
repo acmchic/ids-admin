@@ -17,6 +17,13 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Function to decode HTML entities in filename
+  const decodeHtmlEntities = (str: string): string => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = str;
+    return textarea.value;
+  };
+
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -35,6 +42,9 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
 
     setIsUploading(true);
 
+    // Decode HTML entities in fileName (fix &amp;amp;amp; issue)
+    const decodedFileName = decodeHtmlEntities(fileName);
+
     // Fallback timeout to reset button state if upload hangs
     const fallbackTimeout = setTimeout(() => {
       setIsUploading(false);
@@ -48,7 +58,7 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
       const formData = new FormData();
       formData.append('file', file);
       formData.append('path', imagePath);
-      formData.append('fileName', fileName);
+      formData.append('fileName', decodedFileName);
 
       const response = await fetch('/api/upload-image', {
         method: 'POST',

@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import { useFailedOrders } from "../../hooks/useFailedOrders";
 
 import { Table } from "@components/ui/table";
 import Pagination from "@components/ui/pagination";
@@ -94,12 +95,28 @@ const nameToSlug = (name: string) =>
 const convertToAtworkUrl = (imgUrl: string): string =>
   imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
 
+// Function to get original artwork URL from pivot.img_url
+const getOriginalArtworkUrl = (pivotImgUrl: string): string => {
+  // pivotImgUrl is usually the original artwork URL like:
+  // https://api.idreamshirt.com/images/ids/gmc/the-kakashi-andamp;amp;amp;-pakkun-show_bb5.png
+  // Just return it directly
+  return pivotImgUrl;
+};
+
 
 const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps) => {
   const { data, paginatorInfo } = orders ?? {};
   const { t } = useTranslation();
   const router = useRouter();
   const { alignLeft } = useIsRTL();
+  
+  // Hook to get failed orders
+  const { failedOrders, loading: failedOrdersLoading } = useFailedOrders();
+
+  // Function to check if order is in failed orders list
+  const isFailedOrder = (orderNum: string) => {
+    return failedOrders.some(failedOrder => failedOrder.order_id === orderNum);
+  };
 
   // Function to check if order has customize artwork
   const isCustomizeOrder = (record: any) => {
@@ -192,6 +209,13 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     }
   };
 
+  // Function to decode HTML entities in filename
+  const decodeHtmlEntities = (str: string): string => {
+    const textarea = document.createElement('textarea');
+    textarea.innerHTML = str;
+    return textarea.value;
+  };
+
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, productId: string, imagePath: string, fileName: string) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -211,6 +235,9 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     const uploadKey = `${productId}-image`;
     setUploadingImages(prev => ({ ...prev, [uploadKey]: true }));
 
+    // Decode HTML entities in fileName (fix &amp;amp;amp; issue)
+    const decodedFileName = decodeHtmlEntities(fileName);
+
     // Fallback timeout to reset button state if upload hangs
     const fallbackTimeout = setTimeout(() => {
       setUploadingImages(prev => ({ ...prev, [uploadKey]: false }));
@@ -224,12 +251,13 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       const formData = new FormData();
       formData.append('file', file);
       formData.append('path', imagePath);
-      formData.append('fileName', fileName);
+      formData.append('fileName', decodedFileName);
 
       console.log('🔥 ORDER LIST UPLOAD DEBUG:', {
         productId,
         imagePath,
-        fileName,
+        originalFileName: fileName,
+        decodedFileName: decodedFileName,
         fileSize: file.size,
         fileType: file.type
       });
@@ -359,16 +387,25 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         const orderCount = record.order_count || 1;
         const orderLabel = orderCount === 1 ? "" : `${orderCount}th Order`;
 
+        const isFailed = isFailedOrder(record.order_num);
+
         return (
           <div className="text-sm text-blue-600 flex flex-col gap-8">
             <div>
-              <p
-                className="cursor-pointer hover:underline text-blue-500"
-                onClick={handleCopy}
-                title="Click to copy"
-              >
-                {name}
-              </p>
+              <div className="flex items-center gap-2">
+                <p
+                  className="cursor-pointer hover:underline text-blue-500"
+                  onClick={handleCopy}
+                  title="Click to copy"
+                >
+                  {name}
+                </p>
+                {isFailed && (
+                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-800 animate-pulse">
+                    ❌ FULFILL FAILED
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-600 pt-1">{orderLabel}</p>
 
               {shippingMethod === "express" && (
@@ -514,7 +551,8 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         <div className="flex flex-col">
           {products.map((product, index) => {
             
-            const displayImgUrl = product.pivot?.img_url || product.img_url;
+            // Use product.img_url as display source (artwork that shows when clicked)
+            const displayImgUrl = product.img_url;
             function getImageFolderPath(url?: string): string {
               if (!url) return "CUSTOMIZE"
               const afterImages = url.split("images/")[1] || ""
@@ -522,7 +560,14 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
               return pathParts.slice(0, 2).join("/")
             }
 
-            const linkUrl = product?.img_url || ""
+            // Use product.img_url as link URL (artwork to open when clicked)
+            const linkUrl = product.img_url || ""
+            
+            console.log('🔍 URL STRUCTURE DEBUG:', {
+              productImgUrl: product.img_url,
+              pivotImgUrl: product.pivot?.img_url,
+              linkUrl: linkUrl
+            });
             
             const folderPath = getImageFolderPath(linkUrl)
 
@@ -552,7 +597,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                     rel="noopener noreferrer"
                   >
                     <Image
-                      src={convertToAtworkUrl(product.pivot.img_url)}
+                      src={product.img_url}
                       alt={product.name || 'Product image'}
                       width={130}
                       height={150}
@@ -563,8 +608,10 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
                 {/* Upload Button - Moved below image */}
                 {(() => {
-                  // Use same logic as detail page: img_url first, then pivot.img_url
-                  const imgUrl = product.img_url || product.pivot?.img_url;
+                  // Use product.img_url for artwork (the one that shows when clicked)
+                  const imgUrl = product.img_url;
+                  if (!imgUrl) return null;
+                  
                   const urlParts = imgUrl.split('/');
                   const fileName = urlParts[urlParts.length - 1];
                   
@@ -575,6 +622,14 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                     const pathParts = urlParts.slice(imagesIndex + 1, -1);
                     imagePath = pathParts.join('/');
                   }
+
+                  console.log('🎨 ARTWORK URL DEBUG:', {
+                    originalUrl: imgUrl,
+                    urlParts,
+                    fileName,
+                    imagePath,
+                    imagesIndex
+                  });
 
                   const uploadKey = `${product.id}-image`;
                   const isUploading = uploadingImages[uploadKey];
@@ -902,6 +957,32 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
   return (
     <>
+      {/* Failed Orders Alert Banner */}
+      {failedOrders.length > 0 && (
+        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="ml-3">
+                <h3 className="text-sm font-medium text-red-800">
+                  ❌ {failedOrders.length} Order{failedOrders.length > 1 ? 's' : ''} Fulfill Failed
+                </h3>
+                <div className="mt-2 text-sm text-red-700">
+                  <p>Orders: {failedOrders.map(order => order.order_id).join(', ')}</p>
+                </div>
+              </div>
+            </div>
+            <div className="text-xs text-red-600">
+              {failedOrdersLoading ? 'Refreshing...' : 'Auto-refresh every 30s'}
+            </div>
+          </div>
+        </div>
+      )}
+
       {Object.keys(selectedOrders).length > 0 && (
         <div className="mb-4">
           <button
@@ -923,7 +1004,17 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           scroll={{ x: 1000 }}
           expandable={{ expandIconColumnIndex: -1 }}
           rowClassName={(record) => {
-            return isCustomizeOrder(record) ? 'bg-pink-100 hover:bg-pink-200' : '';
+            const isCustomize = isCustomizeOrder(record);
+            const isFailed = isFailedOrder(record.order_num);
+            
+            if (isFailed && isCustomize) {
+              return 'bg-red-200 hover:bg-red-300 border-l-4 border-red-500'; // Failed + Customize
+            } else if (isFailed) {
+              return 'bg-red-100 hover:bg-red-200 border-l-4 border-red-500'; // Failed only
+            } else if (isCustomize) {
+              return 'bg-pink-100 hover:bg-pink-200'; // Customize only
+            }
+            return '';
           }}
         />
       </div>
