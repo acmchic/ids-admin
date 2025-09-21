@@ -1,9 +1,9 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
-import path from 'path';
 
 interface FailedOrder {
   order_id: string;
+  customer_name: string;
   timestamp: string;
   error: any;
 }
@@ -14,37 +14,47 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    // Path to Laravel log file
+    // Path to Laravel log file (local development)
     const logPath = '/Users/ac/workspace/ids/orders/storage/logs/laravel.log';
     
     if (!fs.existsSync(logPath)) {
-      return res.status(404).json({ error: 'Log file not found' });
+      return res.status(200).json({ 
+        success: true,
+        failed_orders: [],
+        count: 0,
+        message: 'No log file found'
+      });
     }
 
-    // Read log file
+    // Read only last 1000 lines for performance
     const logContent = fs.readFileSync(logPath, 'utf-8');
-    const lines = logContent.split('\n');
+    const allLines = logContent.split('\n').filter(line => line.trim());
+    const lines = allLines.slice(-1000); // Only read last 1000 lines
     
     const failedOrders: FailedOrder[] = [];
-    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
     
     // Parse log lines for failed fulfill attempts
     for (const line of lines) {
-      if (line.includes('❌ Tất cả factory đều thất bại') && line.includes(today)) {
+      if (line.includes('❌ Tất cả factory đều thất bại') || line.includes('❌ Fulfillment failed with Merchize')) {
         try {
+          // Only process today's logs
+          if (!line.includes(today)) continue;
+          
           // Extract timestamp
           const timestampMatch = line.match(/\[(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\]/);
           const timestamp = timestampMatch ? timestampMatch[1] : '';
           
-          // Extract order_id from JSON part
+          // Extract order_id and customer_name from JSON part
           const jsonMatch = line.match(/\{.*\}/);
           if (jsonMatch) {
             const jsonData = JSON.parse(jsonMatch[0]);
-            if (jsonData.order_id) {
+            if (jsonData.order_id && jsonData.customer_name) {
               failedOrders.push({
                 order_id: jsonData.order_id,
+                customer_name: jsonData.customer_name,
                 timestamp: timestamp,
-                error: jsonData.last_error
+                error: jsonData.last_error || jsonData.response
               });
             }
           }
@@ -77,3 +87,5 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     });
   }
 }
+
+

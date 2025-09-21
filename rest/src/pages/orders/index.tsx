@@ -23,6 +23,7 @@ export default function Orders() {
   const [sortedBy, setColumn] = useState<SortOrder>(SortOrder.Desc);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [onlyStatusOne, setOnlyStatusOne] = useState(false);
+  const [onlyStatus78, setOnlyStatus78] = useState(false);
   const [limit, setLimit] = useState(200);
   const [filters, setFilters] = useState({ text: "", date: undefined, status: undefined });
   const [isTodayFilter, setIsTodayFilter] = useState(false);
@@ -38,7 +39,6 @@ export default function Orders() {
   });
 
   const todayOrders = data?.orders?.data || [];
-  console.log("todayOrders ==> ", todayOrders);
   const totalTodayCount = todayOrders.length;
   const totalTodayAmount = todayOrders.reduce((sum, order) => sum + (Number(order.paid_total) || 0), 0);
 
@@ -88,7 +88,7 @@ export default function Orders() {
     setFilters((prev) => ({
       ...prev,
       date: format(today, "yyyy-MM-dd"),
-      status: onlyStatusOne ? 1 : undefined,
+      status: onlyStatusOne ? 1 : onlyStatus78 ? 78 : undefined,
     }));
   };
 
@@ -103,7 +103,7 @@ export default function Orders() {
     setFilters((prev) => ({
       ...prev,
       date: format(yesterday, "yyyy-MM-dd"),
-      status: onlyStatusOne ? 1 : undefined,
+      status: onlyStatusOne ? 1 : onlyStatus78 ? 78 : undefined,
     }));
   };
   
@@ -112,10 +112,11 @@ export default function Orders() {
   const handleApplyFilter = () => {
     setPage(1);
     setIsTodayFilter(false);
+    setIsYesterdayFilter(false);
     setFilters((prev) => ({
       ...prev,
       date: selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined,
-      status: onlyStatusOne ? 1 : undefined,
+      status: onlyStatusOne ? 1 : onlyStatus78 ? 78 : undefined,
     }));
   };
 
@@ -194,15 +195,81 @@ export default function Orders() {
             dateFormat="yyyy-MM-dd"
           />
 
-          <label className="flex items-center text-sm gap-2">
-            <input
-              type="checkbox"
-              checked={onlyStatusOne}
-              onChange={(e) => setOnlyStatusOne(e.target.checked)}
-              className="accent-blue-500"
-            />
-            Status = 1
-          </label>
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <input
+                type="checkbox"
+                id="status-1"
+                checked={onlyStatusOne}
+                onChange={(e) => {
+                  setOnlyStatusOne(e.target.checked);
+                  if (e.target.checked) setOnlyStatus78(false);
+                }}
+                className="sr-only"
+              />
+              <div
+                className={`flex h-5 w-5 items-center justify-center rounded border-2 cursor-pointer transition-colors ${
+                  onlyStatusOne
+                    ? 'bg-blue-500 border-blue-500'
+                    : 'bg-white border-gray-300 hover:border-gray-400'
+                }`}
+                onClick={() => {
+                  setOnlyStatusOne(!onlyStatusOne);
+                  if (!onlyStatusOne) setOnlyStatus78(false);
+                }}
+              >
+                {onlyStatusOne && (
+                  <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            <label
+              htmlFor="status-1"
+              className="text-sm font-medium cursor-pointer select-none"
+            >
+              Status = 1 (Order Received)
+            </label>
+          </div>
+
+          <div className="flex items-center space-x-2">
+            <div className="relative">
+              <input
+                type="checkbox"
+                id="status-78"
+                checked={onlyStatus78}
+                onChange={(e) => {
+                  setOnlyStatus78(e.target.checked);
+                  if (e.target.checked) setOnlyStatusOne(false);
+                }}
+                className="sr-only"
+              />
+              <div
+                className={`flex h-5 w-5 items-center justify-center rounded border-2 cursor-pointer transition-colors ${
+                  onlyStatus78
+                    ? 'bg-red-500 border-red-500'
+                    : 'bg-white border-gray-300 hover:border-gray-400'
+                }`}
+                onClick={() => {
+                  setOnlyStatus78(!onlyStatus78);
+                  if (!onlyStatus78) setOnlyStatusOne(false);
+                }}
+              >
+                {onlyStatus78 && (
+                  <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                )}
+              </div>
+            </div>
+            <label
+              htmlFor="status-78"
+              className="text-sm font-medium cursor-pointer select-none"
+            >
+              Status = 78 (Fulfill Failed)
+            </label>
+          </div>
 
           <select
             value={limit}
@@ -218,6 +285,21 @@ export default function Orders() {
             className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700"
           >
             Apply Filter
+          </button>
+
+          <button
+            onClick={() => {
+              setSelectedDate(null);
+              setOnlyStatusOne(false);
+              setOnlyStatus78(false);
+              setIsTodayFilter(false);
+              setIsYesterdayFilter(false);
+              setFilters({ text: "", date: undefined, status: undefined });
+              setPage(1);
+            }}
+            className="px-4 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Clear All
           </button>
 
           <div className="ml-auto w-full md:w-auto">

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 
 interface FailedOrder {
   order_id: string;
+  customer_name: string;
   timestamp: string;
   error: any;
 }
@@ -42,10 +43,11 @@ export const useFailedOrders = (refreshInterval: number = 30000) => {
     // Fetch immediately
     fetchFailedOrders();
     
-    // Set up interval for periodic refresh
-    const interval = setInterval(fetchFailedOrders, refreshInterval);
-    
-    return () => clearInterval(interval);
+    // Only set up interval if refreshInterval > 0
+    if (refreshInterval > 0) {
+      const interval = setInterval(fetchFailedOrders, refreshInterval);
+      return () => clearInterval(interval);
+    }
   }, [refreshInterval]);
 
   return {
@@ -55,3 +57,5 @@ export const useFailedOrders = (refreshInterval: number = 30000) => {
     refetch: fetchFailedOrders
   };
 };
+
+

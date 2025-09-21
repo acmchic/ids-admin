@@ -9,6 +9,7 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
+import { format } from "date-fns";
 import { useFailedOrders } from "../../hooks/useFailedOrders";
 
 import { Table } from "@components/ui/table";
@@ -110,8 +111,8 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
   const router = useRouter();
   const { alignLeft } = useIsRTL();
   
-  // Hook to get failed orders
-  const { failedOrders, loading: failedOrdersLoading } = useFailedOrders();
+  // Hook to get failed orders - no auto refresh
+  const { failedOrders, loading: failedOrdersLoading, refetch } = useFailedOrders(0);
 
   // Function to check if order is in failed orders list
   const isFailedOrder = (orderNum: string) => {
@@ -146,6 +147,70 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
   const [sortingObj, setSortingObj] = useState<{ sort: SortOrder; column: string | null }>({ sort: SortOrder.Desc, column: null });
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  
+  // State for fulfill progress
+  const [fulfillProgress, setFulfillProgress] = useState<{
+    isProcessing: boolean;
+    currentOrder: string;
+    completed: number;
+    total: number;
+  }>({
+    isProcessing: false,
+    currentOrder: '',
+    completed: 0,
+    total: 0
+  });
+
+  // Function to select all G orders today
+  const handleSelectAllG = () => {
+    const today = new Date();
+    const todayStr = format(today, "yyyy-MM-dd"); // Same logic as Today button
+    
+    console.log('Debug All G - Today:', todayStr);
+    console.log('Debug All G - Total orders:', data?.length);
+    
+    const todayOrdersWithStatus1 = data?.filter(order => {
+      const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
+      const hasStatus1 = order.status?.id === 1;
+      const isToday = orderDate === todayStr;
+      
+      console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
+      
+      return isToday && hasStatus1;
+    }) || [];
+    
+    console.log(`Found ${todayOrdersWithStatus1.length} orders with status 1 (Order Received) today for G fulfill`);
+    
+    const newSelections: Record<string, number> = {};
+    todayOrdersWithStatus1.forEach(order => {
+      newSelections[order.id] = 2; // G status
+    });
+    setSelectedOrders(newSelections);
+  };
+
+  // Function to select all B orders today  
+  const handleSelectAllB = () => {
+    const today = new Date();
+    const todayStr = format(today, "yyyy-MM-dd"); // Same logic as Today button
+    
+    const todayOrdersWithStatus1 = data?.filter(order => {
+      const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
+      const hasStatus1 = order.status?.id === 1;
+      const isToday = orderDate === todayStr;
+      
+      console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
+      
+      return isToday && hasStatus1;
+    }) || [];
+    
+    console.log(`Found ${todayOrdersWithStatus1.length} orders with status 1 (Order Received) today for B fulfill`);
+    
+    const newSelections: Record<string, number> = {};
+    todayOrdersWithStatus1.forEach(order => {
+      newSelections[order.id] = 9; // B status
+    });
+    setSelectedOrders(newSelections);
+  };
 
   const onHeaderClick = (column: string | null) => ({
     onClick: () => {
@@ -159,10 +224,12 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
   });
 
   const handleUnifiedFulfill = async () => {
-    setLoadingRows(prev => ({ ...prev, 'unified': true }));
-    toast.info("Processing fulfill...!!");
-
     const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
+    
+    // Delay between requests to avoid overwhelming the fulfillment servers
+    // 200ms = 5 requests/second, safe for most APIs
+    // Can be reduced to 100ms if servers can handle higher load
+    const FULFILL_DELAY = 200; // milliseconds
 
     try {
       const grouped: Record<number, any[]> = {};
@@ -174,10 +241,31 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         }
       });
 
+      // Calculate total orders
+      const totalOrders = Object.values(grouped).flat().length;
+      
+      // Initialize progress
+      setFulfillProgress({
+        isProcessing: true,
+        currentOrder: '',
+        completed: 0,
+        total: totalOrders
+      });
+
+      let completedCount = 0;
+
       for (const status of Object.keys(grouped)) {
         const ordersForStatus = grouped[+status];
 
         for (const order of ordersForStatus) {
+          // Update current order being processed
+          const customerName = order.shipping_address?.shipping_name || 'Unknown';
+          setFulfillProgress(prev => ({
+            ...prev,
+            currentOrder: `${customerName} (${order.order_num || order.id})`,
+            completed: completedCount
+          }));
+
           try {
             await axios.put(`https://orders.idreamshirt.com/orders/${order.id}`, {
               status: +status,
@@ -194,18 +282,45 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             await logFulfilledOrdersError([order], +status, errMsg);
           }
 
-          await sleep(500);
+          completedCount++;
+          setFulfillProgress(prev => ({
+            ...prev,
+            completed: completedCount
+          }));
+
+          await sleep(FULFILL_DELAY);
         }
       }
 
-      toast.success("All selected orders fulfilled.");
+      // Show completion
+      setFulfillProgress(prev => ({
+        ...prev,
+        currentOrder: 'DONE ✅',
+        completed: totalOrders
+      }));
+
+      toast.success(`✅ DONE! All ${totalOrders} orders fulfilled.`);
       setSelectedOrders({});
-      router.reload();
+      
+      // Hide progress after 2 seconds
+      setTimeout(() => {
+        setFulfillProgress({
+          isProcessing: false,
+          currentOrder: '',
+          completed: 0,
+          total: 0
+        });
+      }, 2000);
+
     } catch (e) {
       console.error(e);
       toast.error("Some fulfillments failed.");
-    } finally {
-      setLoadingRows(prev => ({ ...prev, 'unified': false }));
+      setFulfillProgress({
+        isProcessing: false,
+        currentOrder: '',
+        completed: 0,
+        total: 0
+      });
     }
   };
 
@@ -328,16 +443,13 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           return variantName.includes("classic-t-shirt");
         });
 
-        const fulfillments = hasClassicTee
-          ? [
-            { label: "G", value: 2, color: "blue" },
-            { label: "B_F", value: 12, color: "red" },
-            { label: "B_G", value: 11, color: "red" },
-          ]
-          : [{ label: "G", value: 2, color: "blue" }, { label: "B", value: 9, color: "red" }];
+        const fulfillments = [
+          { label: "G", value: 2, color: "blue" },
+          { label: "B", value: 9, color: "red" }
+        ];
 
         return (
-          <div className="flex flex-row justify-center gap-3">
+          <div className="flex flex-row justify-center gap-2">
             {fulfillments.map(ff => (
               <button
                 key={ff.value}
@@ -352,6 +464,22 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 {ff.label}
               </button>
             ))}
+            {/* Clear button for this row */}
+            {selectedOrders[row.id] && (
+              <button
+                onClick={() => {
+                  setSelectedOrders(prev => {
+                    const newSelections = { ...prev };
+                    delete newSelections[row.id];
+                    return newSelections;
+                  });
+                }}
+                className="px-2 py-2 rounded-md border text-white bg-gray-500 hover:bg-gray-600 text-sm"
+                title="Clear selection for this order"
+              >
+                ✕
+              </button>
+            )}
           </div>
         );
       },
@@ -563,11 +691,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             // Use product.img_url as link URL (artwork to open when clicked)
             const linkUrl = product.img_url || ""
             
-            console.log('🔍 URL STRUCTURE DEBUG:', {
-              productImgUrl: product.img_url,
-              pivotImgUrl: product.pivot?.img_url,
-              linkUrl: linkUrl
-            });
+            
             
             const folderPath = getImageFolderPath(linkUrl)
 
@@ -606,7 +730,18 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                   </a>
                 </div>
 
-                {/* Upload Button - Moved below image */}
+                <p
+                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize")
+                        ? "text-blue-500 font-bold animate-pulse"
+                        : "text-gray-600"
+                      }`}
+                  >
+                    {folderPath.toLowerCase().includes("customize")
+                      ? folderPath.toUpperCase()
+                      : folderPath}
+                  </p>
+
+                {/* Upload Button - Moved below text */}
                 {(() => {
                   // Use product.img_url for artwork (the one that shows when clicked)
                   const imgUrl = product.img_url;
@@ -622,14 +757,6 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                     const pathParts = urlParts.slice(imagesIndex + 1, -1);
                     imagePath = pathParts.join('/');
                   }
-
-                  console.log('🎨 ARTWORK URL DEBUG:', {
-                    originalUrl: imgUrl,
-                    urlParts,
-                    fileName,
-                    imagePath,
-                    imagesIndex
-                  });
 
                   const uploadKey = `${product.id}-image`;
                   const isUploading = uploadingImages[uploadKey];
@@ -661,17 +788,6 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                     </div>
                   );
                 })()}
-
-                <p
-                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize")
-                        ? "text-blue-500 font-bold animate-pulse"
-                        : "text-gray-600"
-                      }`}
-                  >
-                    {folderPath.toLowerCase().includes("customize")
-                      ? folderPath.toUpperCase()
-                      : folderPath}
-                  </p>
 
                 {/* Display image path */}
                 <div className="mt-1">
@@ -808,6 +924,15 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           );
         }
 
+        if (status?.id == 78) {
+          return (
+            <span className="text-red-600 font-semibold flex items-center gap-1">
+              <AlertTriangle size={16} className="text-red-500" />
+              Fulfill Failed
+            </span>
+          );
+        }
+
         return (
           <span
             className="whitespace-nowrap font-semibold"
@@ -907,6 +1032,15 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                   </span>
                 </div>
               )}
+              
+              {/* FULFILL FAILED Badge */}
+              {row.status?.id === 78 && (
+                <div className="mb-2">
+                  <span className="inline-block bg-red-600 text-white text-xs font-bold px-3 py-1 rounded animate-pulse">
+                    FULFILL FAILED
+                  </span>
+                </div>
+              )}
               {/* Fulfill Button */}
 
               <button
@@ -972,27 +1106,92 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                   ❌ {failedOrders.length} Order{failedOrders.length > 1 ? 's' : ''} Fulfill Failed
                 </h3>
                 <div className="mt-2 text-sm text-red-700">
-                  <p>Orders: {failedOrders.map(order => order.order_id).join(', ')}</p>
+                  <p>Customers: {failedOrders.map(order => `${order.customer_name} (${order.order_id})`).join(', ')}</p>
                 </div>
               </div>
             </div>
-            <div className="text-xs text-red-600">
-              {failedOrdersLoading ? 'Refreshing...' : 'Auto-refresh every 30s'}
+            <div className="text-xs text-red-600 flex items-center gap-2">
+              <span>{failedOrdersLoading ? 'Refreshing...' : 'Manual refresh only'}</span>
+              <button
+                onClick={refetch}
+                disabled={failedOrdersLoading}
+                className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
+              >
+                🔄 Refresh
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {Object.keys(selectedOrders).length > 0 && (
-        <div className="mb-4">
+      {/* Selection Controls */}
+      <div className="mb-4 flex flex-wrap gap-4 items-center">
+        <div className="flex gap-8">
           <button
-            className="px-4 py-2 bg-indigo-600 text-white rounded"
-            onClick={handleUnifiedFulfill}
+            onClick={handleSelectAllG}
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
           >
-            Fulfill Selected ({Object.keys(selectedOrders).length})
+            All G 
+          </button>
+          <button
+            onClick={handleSelectAllB}
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+          >
+            All B 
+          </button>
+          <button
+            onClick={() => setSelectedOrders({})}
+            className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
+          >
+            Clear All
           </button>
         </div>
-      )}
+        
+        {Object.keys(selectedOrders).length > 0 && (
+          <div className="flex items-center gap-4">
+            <button
+              className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleUnifiedFulfill}
+              disabled={fulfillProgress.isProcessing}
+            >
+              {fulfillProgress.isProcessing ? (
+                <span className="flex items-center gap-2">
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  Processing...
+                </span>
+              ) : (
+                `Fulfill Selected (${Object.keys(selectedOrders).length})`
+              )}
+            </button>
+            
+            {/* Progress indicator */}
+            {fulfillProgress.isProcessing && (
+              <div className="flex items-center gap-3 text-sm">
+                <div className="bg-blue-100 px-3 py-2 rounded-lg border">
+                  <div className="font-medium text-blue-800">
+                    Progress: {fulfillProgress.completed}/{fulfillProgress.total}
+                  </div>
+                  <div className="text-blue-600 text-xs mt-1">
+                    {fulfillProgress.currentOrder && (
+                      <span>Processing: {fulfillProgress.currentOrder}</span>
+                    )}
+                  </div>
+                </div>
+                
+                {/* Progress bar */}
+                <div className="w-32 bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ 
+                      width: `${fulfillProgress.total > 0 ? (fulfillProgress.completed / fulfillProgress.total) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="rounded overflow-hidden shadow mb-6">
         <Table
@@ -1006,10 +1205,11 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           rowClassName={(record) => {
             const isCustomize = isCustomizeOrder(record);
             const isFailed = isFailedOrder(record.order_num);
+            const isFulfillFailed = record.status?.id === 78;
             
-            if (isFailed && isCustomize) {
+            if ((isFailed || isFulfillFailed) && isCustomize) {
               return 'bg-red-200 hover:bg-red-300 border-l-4 border-red-500'; // Failed + Customize
-            } else if (isFailed) {
+            } else if (isFailed || isFulfillFailed) {
               return 'bg-red-100 hover:bg-red-200 border-l-4 border-red-500'; // Failed only
             } else if (isCustomize) {
               return 'bg-pink-100 hover:bg-pink-200'; // Customize only
