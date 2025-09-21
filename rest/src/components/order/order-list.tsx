@@ -668,175 +668,79 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         </div>
       ),
     },
+    
+        {
+  title: "ATWORK",
+  dataIndex: "products",
+  key: "products",
+  align: "center",
+  width: 200,
+  render: (products: any[] = []) => (
+    <div className="flex flex-col">
+      {products.map((product, index) => {
+        const imgUrl = product?.img_url || "/placeholder.svg"; // fallback
+        const originalUrl = product?.pivot?.img_url || "";
+        const urlParts = originalUrl.split("/");
+        const mediaIndex = urlParts.findIndex((part) => part === "media");
 
-    {
-      title: "ATWORK",
-      dataIndex: "products",
-      key: "products",
-      align: "center",
-      width: 200,
-      render: (products: any[]) => (
-        <div className="flex flex-col">
-          {products.map((product, index) => {
-            
-            // Use product.img_url as display source (artwork that shows when clicked)
-            const displayImgUrl = product.img_url;
-            function getImageFolderPath(url?: string): string {
-              if (!url) return "CUSTOMIZE"
-              const afterImages = url.split("images/")[1] || ""
-              const pathParts = afterImages.split("/")
-              return pathParts.slice(0, 2).join("/")
-            }
+        let imagePath = "custom";
+        if (mediaIndex !== -1 && mediaIndex + 1 < urlParts.length) {
+          const pathParts = urlParts.slice(mediaIndex + 1, -1);
+          imagePath =
+            pathParts.length >= 2
+              ? pathParts.slice(-2).join("/")
+              : pathParts.join("/");
+        }
 
-            // Use product.img_url as link URL (artwork to open when clicked)
-            const linkUrl = product.img_url || ""
-            
-            
-            
-            const folderPath = getImageFolderPath(linkUrl)
+        const isCustomize = imagePath.toLowerCase().includes("customize");
+        const isIdsGmc = imagePath.includes("ids/gmc");
 
+        let textClass = "text-xs font-mono";
+        if (isCustomize) {
+          textClass += " text-red-500 font-bold animate-pulse";
+        } else if (isIdsGmc) {
+          textClass += " text-red-500";
+        } else {
+          textClass += " text-gray-600";
+        }
 
-            if (!displayImgUrl) {
-              return (
-                <div
-                  key={`${product.id}-${index}`}
-                  className="mb-2 text-center"
-                >
-                  <div className="w-[130px] h-[150px] bg-gray-200 rounded-md flex items-center justify-center text-gray-500 text-xs">
-                    No Image
-                  </div>
-                </div>
-              );
-            }
+        return (
+          <div
+            key={`${product?.id || "p"}-${index}`}
+            className="mb-2 text-center relative group"
+          >
+            <div className="inline-block transition-transform transform group-hover:scale-150 relative">
+              <a href={imgUrl} target="_blank" rel="noopener noreferrer">
+                <Image
+                  src={imgUrl}
+                  alt={product?.name || "product"}
+                  width={130}
+                  height={150}
+                  className="rounded-md object-cover"
+                  loading="lazy"
+                />
+              </a>
+            </div>
 
-            return (
-              <div
-                key={`${product.id}-${index}`}
-                className="mb-2 text-center"
+            <div className="mt-1">
+              <a
+                href={imgUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`${textClass} hover:underline cursor-pointer`}
               >
-                <div className="inline-block transition-transform transform hover:scale-150 relative">
-                  <a
-                    href={linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Image
-                      src={product.img_url}
-                      alt={product.name || 'Product image'}
-                      width={130}
-                      height={150}
-                      className="rounded-md object-cover"
-                    />
-                  </a>
-                </div>
-
-                <p
-                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize")
-                        ? "text-blue-500 font-bold animate-pulse"
-                        : "text-gray-600"
-                      }`}
-                  >
-                    {folderPath.toLowerCase().includes("customize")
-                      ? folderPath.toUpperCase()
-                      : folderPath}
-                  </p>
-
-                {/* Upload Button - Moved below text */}
-                {(() => {
-                  // Use product.img_url for artwork (the one that shows when clicked)
-                  const imgUrl = product.img_url;
-                  if (!imgUrl) return null;
-                  
-                  const urlParts = imgUrl.split('/');
-                  const fileName = urlParts[urlParts.length - 1];
-                  
-                  // Extract path from URL (after /images/) - same logic as detail page
-                  const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
-                  let imagePath = 'custom';
-                  if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
-                    const pathParts = urlParts.slice(imagesIndex + 1, -1);
-                    imagePath = pathParts.join('/');
-                  }
-
-                  const uploadKey = `${product.id}-image`;
-                  const isUploading = uploadingImages[uploadKey];
-
-                  return (
-                    <div className="mt-2 flex justify-center">
-                      <input
-                        ref={(el) => {
-                          fileInputRefs.current[uploadKey] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleImageUpload(e, product.id.toString(), imagePath, fileName)}
-                        className="hidden"
-                      />
-                      <button
-                        onClick={() => fileInputRefs.current[uploadKey]?.click()}
-                        disabled={isUploading}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                        title="Upload new artwork image"
-                      >
-                        {isUploading ? (
-                          <span className="w-3 h-3 animate-spin">⏳</span>
-                        ) : (
-                          <span className="w-3 h-3">📤</span>
-                        )}
-                        {isUploading ? 'Up...' : 'Up'}
-                      </button>
-                    </div>
-                  );
-                })()}
-
-                {/* Display image path */}
-                <div className="mt-1">
-                  {(() => {
-                    // Lấy path từ URL gốc để hiển thị
-                    const originalUrl = product.pivot?.img_url || product.img_url;
-                    if (!originalUrl) return null;
-
-                    const urlParts = originalUrl.split("/");
-                    const imagesIndex = urlParts.findIndex((part: string) => part === "images");
-                    let imagePath = "";
-
-                    if (imagesIndex !== -1 && imagesIndex + 2 < urlParts.length) {
-                      // Lấy 2 phần sau "images" (ví dụ: w_shirt/tv)
-                      imagePath = urlParts.slice(imagesIndex + 1, imagesIndex + 3).join("/");
-                    }
-
-                    if (!imagePath) return null;
-
-                    const isCustomize = imagePath.toLowerCase().includes("customize");
-
-                    let textClass = "text-xs font-mono";
-                    if (isCustomize) {
-                      textClass += " text-green-500 font-bold animate-pulse";
-                    } else {
-                      textClass += " text-gray-600";
-                    }
-
-                    return (
-                      <a
-                        href={linkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${textClass} hover:underline cursor-pointer`}
-                      >
-                        {isCustomize ? imagePath.toUpperCase() : imagePath}
-                      </a>
-                    );
-                  })()}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ),
-    }
-    ,
-
-
+                {isCustomize ? imagePath.toUpperCase() : imagePath}
+              </a>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  ),
+}
+,
+    
+    
 
     {
       title: (
