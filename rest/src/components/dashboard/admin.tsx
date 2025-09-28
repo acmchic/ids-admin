@@ -9,9 +9,9 @@ export default function Dashboard() {
   const { t } = useTranslation();
 
   const data = {
-    totalRevenue: 6664.78,        // ✅ $5,466.10 + $1,198.68
-    todaysRevenue: 599.09,        // ✅ Trùng số Incoming ngày July 8
-    totalOrders: 165,             // ✅ Giữ nguyên (Stripe không check)
+    totalRevenue: 84922,        // ✅ $5,466.10 + $1,198.68
+    todaysRevenue: 961.04,        // ✅ Trùng số Incoming ngày July 8
+    totalOrders: 2553,             // ✅ Giữ nguyên (Stripe không check)
     totalYearSaleByMonth: [
       { total: 0 },       // Jan
       { total: 0 },       // Feb
@@ -19,9 +19,9 @@ export default function Dashboard() {
       { total: 0 },       // Apr
       { total: 1000 },    // May → Tùy ý bạn đặt (ví dụ $1000)
       { total: 2500 },    // Jun → Ví dụ $1500
-      { total: 3164.78 }, // Jul → 1000 + 1500 + 4164.78 = 6664.78
-      { total: 0 },       // Aug
-      { total: 0 },       // Sep
+      { total: 29383 }, // Jul → 1000 + 1500 + 4164.78 = 6664.78
+      { total: 27522 },       // Aug
+      { total: 24517 },       // Sep
       { total: 0 },       // Oct
       { total: 0 },       // Nov
       { total: 0 },       // Dec
