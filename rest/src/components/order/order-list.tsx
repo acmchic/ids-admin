@@ -36,7 +36,7 @@ const logFulfilledOrders = async (orders: any[], statusCode: number) => {
     const yyyyMM = now.toISOString().slice(0, 7); // e.g., "2025-06"
     const dd = now.toISOString().slice(8, 10); // e.g., "09"
 
-    const ffName = statusCode === 68 ? "merchize" : statusCode === 9 ? "burger" : "gearment";
+    const ffName = statusCode === 68 ? "merchize" : statusCode === 9 ? "burger" : statusCode === 69 ? "mango" : "gearment";
     const logFileName = `/logs/${yyyyMM}/${dd}/${ffName}.log`;
 
     const logLines = orders.map(order => {
@@ -60,7 +60,7 @@ const logFulfilledOrdersError = async (orders: any[], statusCode: number, errorM
     const yyyyMM = now.toISOString().slice(0, 7);
     const dd = now.toISOString().slice(8, 10);
 
-    const ffName = statusCode === 68 ? "merchize" : statusCode === 9 ? "burger" : "gearment";
+    const ffName = statusCode === 68 ? "merchize" : statusCode === 9 ? "burger" : statusCode === 69 ? "mango" : "gearment";
     const logFileName = `/logs/${yyyyMM}/${dd}/${ffName}.error.log`;
 
     const logLines = orders.map(order => {
@@ -208,6 +208,30 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     const newSelections: Record<string, number> = {};
     todayOrdersWithStatus1.forEach(order => {
       newSelections[order.id] = 9; // B status
+    });
+    setSelectedOrders(newSelections);
+  };
+
+  // Function to select all M orders today  
+  const handleSelectAllM = () => {
+    const today = new Date();
+    const todayStr = format(today, "yyyy-MM-dd"); // Same logic as Today button
+    
+    const todayOrdersWithStatus1 = data?.filter(order => {
+      const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
+      const hasStatus1 = order.status?.id === 1;
+      const isToday = orderDate === todayStr;
+      
+      console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
+      
+      return isToday && hasStatus1;
+    }) || [];
+    
+    console.log(`Found ${todayOrdersWithStatus1.length} orders with status 1 (Order Received) today for M fulfill`);
+    
+    const newSelections: Record<string, number> = {};
+    todayOrdersWithStatus1.forEach(order => {
+      newSelections[order.id] = 69; // M status
     });
     setSelectedOrders(newSelections);
   };
@@ -443,27 +467,46 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           return variantName.includes("classic-t-shirt");
         });
 
-        const fulfillments = [
-          { label: "G", value: 2, color: "blue" },
-          { label: "B", value: 9, color: "red" }
-        ];
-
         return (
           <div className="flex flex-row justify-center gap-2">
-            {fulfillments.map(ff => (
-              <button
-                key={ff.value}
-                onClick={() =>
-                  setSelectedOrders(prev => ({ ...prev, [row.id]: ff.value }))
-                }
-                className={`px-3 py-2 rounded-md border text-white bg-${ff.color}-500 hover:bg-${ff.color}-600 text-sm ${selectedOrders[row.id] === ff.value
-                    ? 'ring-2 ring-offset-1 ring-' + ff.color + '-300'
-                    : ''
-                  }`}
-              >
-                {ff.label}
-              </button>
-            ))}
+            {/* G Button */}
+            <button
+              onClick={() =>
+                setSelectedOrders(prev => ({ ...prev, [row.id]: 2 }))
+              }
+              className={`px-3 py-2 rounded-md border text-white bg-blue-500 hover:bg-blue-600 text-sm ${selectedOrders[row.id] === 2
+                  ? 'ring-2 ring-offset-1 ring-blue-300'
+                  : ''
+                }`}
+            >
+              G
+            </button>
+            
+            {/* B Button */}
+            <button
+              onClick={() =>
+                setSelectedOrders(prev => ({ ...prev, [row.id]: 9 }))
+              }
+              className={`px-3 py-2 rounded-md border text-white bg-red-500 hover:bg-red-600 text-sm ${selectedOrders[row.id] === 9
+                  ? 'ring-2 ring-offset-1 ring-red-300'
+                  : ''
+                }`}
+            >
+              B
+            </button>
+            
+            {/* M Button - Clone from B button */}
+            <button
+              onClick={() =>
+                setSelectedOrders(prev => ({ ...prev, [row.id]: 69 }))
+              }
+              className={`px-3 py-2 rounded-md border text-white bg-green-500 hover:bg-green-600 text-sm ${selectedOrders[row.id] === 69
+                  ? 'ring-2 ring-offset-1 ring-green-300'
+                  : ''
+                }`}
+            >
+              M
+            </button>
             {/* Clear button for this row */}
             {selectedOrders[row.id] && (
               <button
@@ -914,6 +957,8 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         if (status?.id == 2) additionalText = "(G)";
         else if (status?.id == 9) additionalText = "(Burgerprint)";
         else if (status?.id == 8) additionalText = "(Printway)";
+        else if (status?.id == 68) additionalText = "(Merchize)";
+        else if (status?.id == 69) additionalText = "(MangoPrint)";
 
         if (status?.id == 77) {
           return (
@@ -1020,6 +1065,19 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           }
         };
 
+        const handleMangoPrint = async () => {
+          setLoadingRows((prev) => ({ ...prev, [`mango-${id}`]: true }));
+
+          try {
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 69 });
+            toast.success("MangoPrint order fulfilled successfully!");
+          } catch (error) {
+            toast.error("Failed to fulfill the MangoPrint order. Please try again.");
+          } finally {
+            setLoadingRows((prev) => ({ ...prev, [`mango-${id}`]: false }));
+          }
+        };
+
         return (
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
@@ -1049,12 +1107,27 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-500 hover:bg-green-600 transition"
               >
                 {loadingRows[`merchize-${id}`] ? (
-                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
+                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`merchize-${id}`]} />
                 ) : (
                   ''
                 )}
                 Merchize
               </button>
+              
+              {/* MangoPrint Button */}
+              <button
+                onClick={handleMangoPrint}
+                disabled={loadingRows[`mango-${id}`]}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-600 hover:bg-green-700 transition font-semibold"
+              >
+                {loadingRows[`mango-${id}`] ? (
+                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`mango-${id}`]} />
+                ) : (
+                  <span className="text-lg">🥭</span>
+                )}
+                <span className="text-white font-semibold">Mango</span>
+              </button>
+              
               {/* Burger Button */}
               <button
                 onClick={handleBurger}
@@ -1138,6 +1211,12 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
           >
             All B 
+          </button>
+          <button
+            onClick={handleSelectAllM}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
+          >
+            All M 
           </button>
           <button
             onClick={() => setSelectedOrders({})}
