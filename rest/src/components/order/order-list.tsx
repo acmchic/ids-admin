@@ -990,11 +990,11 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     },
 
     {
-      title: "Tracking",
+      title: "Transactions",
       dataIndex: "tracking_number",
       key: "tracking",
       align: "center",
-      width: 200,
+      width: 400,
       render: (_: any, row: any) => {
         const trackingNumber = row.tracking_number || "No Tracking";
         const trackingUrl = row.tracking_url || "";
