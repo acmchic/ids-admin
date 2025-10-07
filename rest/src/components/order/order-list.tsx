@@ -560,9 +560,40 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
         const isFailed = isFailedOrder(record.order_num);
 
+        const handleCopyOrderNum = () => {
+          if (record.order_num) {
+            navigator.clipboard.writeText(record.order_num);
+            toast.success("COPIED ORDER NUMBER");
+          }
+        };
+
         return (
           <div className="text-sm text-blue-600 flex flex-col gap-8">
             <div>
+              {/* Order Number - click to copy */}
+              {record.order_num && (
+                <p
+                  className="cursor-pointer hover:underline text-indigo-600 font-semibold"
+                  onClick={handleCopyOrderNum}
+                  title="Click to copy order number"
+                >
+                  #{record.order_num}
+                </p>
+              )}
+              
+              {/* Detail link - click to open page */}
+              {record.order_num && (
+                <a
+                  href={`https://idreamshirt.com/orders/${record.order_num}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-sm text-green-600 hover:underline cursor-pointer block mb-2"
+                  title="View order details"
+                >
+                  Detail
+                </a>
+              )}
+              
               <div className="flex items-center gap-2">
                 <p
                   className="cursor-pointer hover:underline text-blue-500"
@@ -954,7 +985,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       render: (status: OrderStatus) => {
         let additionalText = "";
 
-        if (status?.id == 2) additionalText = "(G)";
+        if (status?.id == 2) additionalText = "(Mango)";
         else if (status?.id == 9) additionalText = "(Burgerprint)";
         else if (status?.id == 8) additionalText = "(Printway)";
         else if (status?.id == 68) additionalText = "(Merchize)";
