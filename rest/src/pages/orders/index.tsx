@@ -24,8 +24,9 @@ export default function Orders() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [onlyStatusOne, setOnlyStatusOne] = useState(false);
   const [onlyStatus78, setOnlyStatus78] = useState(false);
+  const [inProductionProcessing, setInProductionProcessing] = useState(false);
   const [limit, setLimit] = useState(200);
-  const [filters, setFilters] = useState({ text: "", date: undefined, status: undefined });
+  const [filters, setFilters] = useState({ text: "", date: undefined, status: undefined, status_in: undefined });
   const [isTodayFilter, setIsTodayFilter] = useState(false);
   const [isYesterdayFilter, setIsYesterdayFilter] = useState(false);
 
@@ -85,11 +86,23 @@ export default function Orders() {
     setSelectedDate(today);
     setIsTodayFilter(true);
     setPage(1);
-    setFilters((prev) => ({
-      ...prev,
+    
+    let newFilters: any = {
+      ...filters,
       date: format(today, "yyyy-MM-dd"),
-      status: onlyStatusOne ? 1 : onlyStatus78 ? 78 : undefined,
-    }));
+      status: undefined,
+      status_in: undefined,
+    };
+
+    if (inProductionProcessing) {
+      newFilters.status_in = "2,8,9,11,12,68,77,78";
+    } else if (onlyStatusOne) {
+      newFilters.status = 1;
+    } else if (onlyStatus78) {
+      newFilters.status = 78;
+    }
+
+    setFilters(newFilters);
   };
 
   const handleYesterdayFilter = () => {
@@ -100,11 +113,23 @@ export default function Orders() {
     setIsTodayFilter(false);
     setIsYesterdayFilter(true);
     setPage(1);
-    setFilters((prev) => ({
-      ...prev,
+    
+    let newFilters: any = {
+      ...filters,
       date: format(yesterday, "yyyy-MM-dd"),
-      status: onlyStatusOne ? 1 : onlyStatus78 ? 78 : undefined,
-    }));
+      status: undefined,
+      status_in: undefined,
+    };
+
+    if (inProductionProcessing) {
+      newFilters.status_in = "2,8,9,11,12,68,77,78";
+    } else if (onlyStatusOne) {
+      newFilters.status = 1;
+    } else if (onlyStatus78) {
+      newFilters.status = 78;
+    }
+
+    setFilters(newFilters);
   };
   
 
@@ -113,11 +138,23 @@ export default function Orders() {
     setPage(1);
     setIsTodayFilter(false);
     setIsYesterdayFilter(false);
-    setFilters((prev) => ({
-      ...prev,
+    
+    let newFilters: any = {
+      ...filters,
       date: selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined,
-      status: onlyStatusOne ? 1 : onlyStatus78 ? 78 : undefined,
-    }));
+      status: undefined,
+      status_in: undefined,
+    };
+
+    if (inProductionProcessing) {
+      newFilters.status_in = "2,8,9,11,12,68,77,78";
+    } else if (onlyStatusOne) {
+      newFilters.status = 1;
+    } else if (onlyStatus78) {
+      newFilters.status = 78;
+    }
+
+    setFilters(newFilters);
   };
 
   const handleCopyAllNames = () => {
@@ -203,7 +240,10 @@ export default function Orders() {
                 checked={onlyStatusOne}
                 onChange={(e) => {
                   setOnlyStatusOne(e.target.checked);
-                  if (e.target.checked) setOnlyStatus78(false);
+                  if (e.target.checked) {
+                    setOnlyStatus78(false);
+                    setInProductionProcessing(false);
+                  }
                 }}
                 className="sr-only"
               />
@@ -215,7 +255,10 @@ export default function Orders() {
                 }`}
                 onClick={() => {
                   setOnlyStatusOne(!onlyStatusOne);
-                  if (!onlyStatusOne) setOnlyStatus78(false);
+                  if (!onlyStatusOne) {
+                    setOnlyStatus78(false);
+                    setInProductionProcessing(false);
+                  }
                 }}
               >
                 {onlyStatusOne && (
@@ -241,7 +284,10 @@ export default function Orders() {
                 checked={onlyStatus78}
                 onChange={(e) => {
                   setOnlyStatus78(e.target.checked);
-                  if (e.target.checked) setOnlyStatusOne(false);
+                  if (e.target.checked) {
+                    setOnlyStatusOne(false);
+                    setInProductionProcessing(false);
+                  }
                 }}
                 className="sr-only"
               />
@@ -253,7 +299,10 @@ export default function Orders() {
                 }`}
                 onClick={() => {
                   setOnlyStatus78(!onlyStatus78);
-                  if (!onlyStatus78) setOnlyStatusOne(false);
+                  if (!onlyStatus78) {
+                    setOnlyStatusOne(false);
+                    setInProductionProcessing(false);
+                  }
                 }}
               >
                 {onlyStatus78 && (
@@ -268,6 +317,28 @@ export default function Orders() {
               className="text-sm font-medium cursor-pointer select-none"
             >
               Status = 78 (Fulfill Failed)
+            </label>
+          </div>
+
+          <div className="flex items-center gap-2 px-3 py-2 border rounded hover:bg-gray-50">
+            <input
+              type="checkbox"
+              id="in-production-processing"
+              checked={inProductionProcessing}
+              onChange={(e) => {
+                setInProductionProcessing(e.target.checked);
+                if (e.target.checked) {
+                  setOnlyStatusOne(false);
+                  setOnlyStatus78(false);
+                }
+              }}
+              className="w-4 h-4 text-orange-600 bg-white border-gray-300 rounded focus:ring-orange-500 focus:ring-2 cursor-pointer"
+            />
+            <label
+              htmlFor="in-production-processing"
+              className="text-sm font-medium cursor-pointer select-none"
+            >
+              In-Production & Processing
             </label>
           </div>
 
@@ -292,9 +363,10 @@ export default function Orders() {
               setSelectedDate(null);
               setOnlyStatusOne(false);
               setOnlyStatus78(false);
+              setInProductionProcessing(false);
               setIsTodayFilter(false);
               setIsYesterdayFilter(false);
-              setFilters({ text: "", date: undefined, status: undefined });
+              setFilters({ text: "", date: undefined, status: undefined, status_in: undefined });
               setPage(1);
             }}
             className="px-4 py-1 bg-gray-500 text-white rounded hover:bg-gray-600"

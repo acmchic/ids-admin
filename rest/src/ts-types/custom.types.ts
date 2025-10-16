@@ -70,7 +70,8 @@ export type QueryOptionsType = {
   orderBy?: string;
   sortedBy?: SortOrder;
   date?: string;   
-  status?: number; 
+  status?: number;
+  status_in?: string;
 };
 
 export type QueryParamsType = {

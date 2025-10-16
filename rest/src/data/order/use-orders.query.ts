@@ -14,6 +14,7 @@ const fetchOrders = async ({ queryKey }: QueryParamsType) => {
     sortedBy = "DESC",
     date,
     status,
+    status_in,
   } = params as QueryOptionsType;
 
   const urlParams = new URLSearchParams();
@@ -21,6 +22,7 @@ const fetchOrders = async ({ queryKey }: QueryParamsType) => {
   if (text) urlParams.append("text", text);
   if (date) urlParams.append("date", date);
   if (status !== undefined) urlParams.append("status", String(status));
+  if (status_in !== undefined) urlParams.append("status_in", String(status_in));
 
   urlParams.append("page", String(page));
   urlParams.append("limit", String(limit));
