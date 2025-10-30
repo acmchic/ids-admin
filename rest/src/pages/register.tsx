@@ -17,7 +17,7 @@ export default function RegisterPage() {
   const router = useRouter();
   const { token, permissions } = getAuthCredentials();
   if (isAuthenticated({ token, permissions })) {
-    router.replace(ROUTES.ORDERS);
+    // router.replace(ROUTES.ORDERS);
   }
   const { t } = useTranslation("common");
   return (
