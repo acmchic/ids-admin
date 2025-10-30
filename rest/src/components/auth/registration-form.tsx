@@ -48,40 +48,36 @@ const RegistrationForm = () => {
 	const { t } = useTranslation();
 
 	async function onSubmit({ name, email, password, permission }: FormValues) {
-		registerUser(
-			{
-				variables: {
-					name,
-					email,
-					password,
-					permission,
-				},
+	registerUser(
+		{
+			variables: {
+				name,
+				email,
+				password,
+				permission,
 			},
-
-			{
-				onSuccess: ({ data }) => {
-					if (data?.token) {
-						if (hasAccess(allowedRoles, data?.permissions)) {
-							setAuthCredentials(data?.token, data?.permissions);
-							router.push(ROUTES.ORDERS);
-							return;
-						}
-						setErrorMessage("form:error-enough-permission");
-					} else {
-						setErrorMessage("form:error-credential-wrong");
-					}
-				},
-				onError: (error: any) => {
-					Object.keys(error?.response?.data).forEach((field: any) => {
-						setError(field, {
-							type: "manual",
-							message: error?.response?.data[field],
-						});
+		},
+		{
+			onSuccess: ({ data }) => {
+				if (data?.token) {
+					// ❌ Không tự động đăng nhập
+					setErrorMessage("Your account has been created. Please wait for admin approval.");
+				} else {
+					setErrorMessage("form:error-credential-wrong");
+				}
+			},
+			onError: (error: any) => {
+				Object.keys(error?.response?.data || {}).forEach((field: any) => {
+					setError(field, {
+						type: "manual",
+						message: error?.response?.data[field],
 					});
-				},
-			}
-		);
-	}
+				});
+			},
+		}
+	);
+}
+
 
 	return (
 		<>
