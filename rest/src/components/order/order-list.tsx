@@ -220,7 +220,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     
     const todayOrdersWithStatus1 = data?.filter(order => {
       const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
-      const hasStatus1 = order.status?.id === 1;
+      const hasStatus1 = order.status?.id === 1 || order.status?.id === 78;
       const isToday = orderDate === todayStr;
       
       console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
@@ -721,6 +721,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           {products.map((product, index) => {
             const imgUrl = product.pivot?.img_url || "";
             const match = imgUrl.split("/media/")[1]?.split("/")[0] || "";
+            const upscaylImage = product.pivot?.upscayl_image || null;
 
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
@@ -736,6 +737,33 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 />
                 {match && (
                   <p className="pt-1">{match}</p>
+                )}
+                {/* Upscayl Image Icon */}
+                {upscaylImage && (
+                  <div className="pt-1 flex justify-center">
+                    <a
+                      href={upscaylImage}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center justify-center w-6 h-6 bg-green-500 hover:bg-green-600 rounded-full text-white cursor-pointer transition-colors"
+                      title="Click to view upscayl image"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                        />
+                      </svg>
+                    </a>
+                  </div>
                 )}
               </div>
             );
