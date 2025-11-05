@@ -22,6 +22,7 @@ import { PacmanLoader } from "react-spinners";
 import { useIsRTL } from "@utils/locals";
 import { UsState } from "../../utils/us-states";
 import { AlertTriangle } from "lucide-react";
+import { getApiUrl } from "../../config/api";
 
 import {
   OrderPaginator,
@@ -752,20 +753,41 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       render: (products: any[]) => (
         <div className="flex flex-col">
           {products.map((product, index) => {
+            // Check if this is a customize product
+            let displayImgUrl = "";
+            let linkUrl = "";
+            let isCustomize = false;
+            const API_URL = getApiUrl();
             
-            // Use product.img_url as display source (artwork that shows when clicked)
-            const displayImgUrl = product.img_url;
+            if (product.is_customize && product.image) {
+              // Customize product - get image from products_customize table
+              try {
+                const images = JSON.parse(product.image);
+                
+                if (images && images.length > 0 && images[0].original) {
+                  const originalPath = images[0].original;
+                  // Build URL: API_URL + '/images/' + original
+                  displayImgUrl = `${API_URL}/images/${originalPath}`;
+                  linkUrl = displayImgUrl;
+                  isCustomize = true;
+                }
+              } catch (e) {
+                console.error("Parse customize image error:", e);
+              }
+            }
+            
+            // Regular product - use product.img_url
+            if (!displayImgUrl) {
+              displayImgUrl = product.img_url || "";
+              linkUrl = product.img_url || "";
+            }
+
             function getImageFolderPath(url?: string): string {
               if (!url) return "CUSTOMIZE"
               const afterImages = url.split("images/")[1] || ""
               const pathParts = afterImages.split("/")
               return pathParts.slice(0, 2).join("/")
             }
-
-            // Use product.img_url as link URL (artwork to open when clicked)
-            const linkUrl = product.img_url || ""
-            
-            
             
             const folderPath = getImageFolderPath(linkUrl)
 
@@ -795,7 +817,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                     rel="noopener noreferrer"
                   >
                     <Image
-                      src={product.img_url}
+                      src={displayImgUrl}
                       alt={product.name || 'Product image'}
                       width={130}
                       height={150}
@@ -805,31 +827,44 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 </div>
 
                 <p
-                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize")
+                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize") || isCustomize
                         ? "text-blue-500 font-bold animate-pulse"
                         : "text-gray-600"
                       }`}
                   >
-                    {folderPath.toLowerCase().includes("customize")
+                    {folderPath.toLowerCase().includes("customize") || isCustomize
                       ? folderPath.toUpperCase()
                       : folderPath}
                   </p>
 
                 {/* Upload Button - Moved below text */}
                 {(() => {
-                  // Use product.img_url for artwork (the one that shows when clicked)
-                  const imgUrl = product.img_url;
+                  // For customize products, use displayImgUrl (already built above)
+                  // For regular products, use product.img_url
+                  const imgUrl = isCustomize ? displayImgUrl : product.img_url;
                   if (!imgUrl) return null;
                   
                   const urlParts = imgUrl.split('/');
                   const fileName = urlParts[urlParts.length - 1];
                   
-                  // Extract path from URL (after /images/) - same logic as detail page
-                  const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
+                  // Extract path from URL (after /images/)
                   let imagePath = 'custom';
-                  if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
-                    const pathParts = urlParts.slice(imagesIndex + 1, -1);
-                    imagePath = pathParts.join('/');
+                  
+                  if (isCustomize) {
+                    // For customize: extract from /images/customize/25_11_05/{fileName}
+                    // imagePath should be: customize/25_11_05
+                    const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
+                    if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
+                      const pathParts = urlParts.slice(imagesIndex + 1, -1);
+                      imagePath = pathParts.join('/');
+                    }
+                  } else {
+                    // For regular: extract from /images/...
+                    const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
+                    if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
+                      const pathParts = urlParts.slice(imagesIndex + 1, -1);
+                      imagePath = pathParts.join('/');
+                    }
                   }
 
                   const uploadKey = `${product.id}-image`;
@@ -849,8 +884,10 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                       <button
                         onClick={() => fileInputRefs.current[uploadKey]?.click()}
                         disabled={isUploading}
-                        className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg"
-                        title="Upload new artwork image"
+                        className={`flex items-center gap-1 px-2 py-1 text-xs text-white rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
+                          isCustomize ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-500 hover:bg-blue-600'
+                        }`}
+                        title={isCustomize ? "Upload new customize artwork" : "Upload new artwork image"}
                       >
                         {isUploading ? (
                           <span className="w-3 h-3 animate-spin">⏳</span>

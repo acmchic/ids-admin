@@ -3,9 +3,9 @@
   "version": "2.0.0",
   "private": true,
   "scripts": {
-    "dev": "export NODE_OPTIONS=--openssl-legacy-provider && next dev -p 3002",
-    "build": "export NODE_OPTIONS=--openssl-legacy-provider && next build",
-    "start": "export NODE_OPTIONS=--openssl-legacy-provider && next start -p 3002"
+    "dev": "set NODE_OPTIONS=--openssl-legacy-provider && next dev -p 3002",
+    "build": "set NODE_OPTIONS=--openssl-legacy-provider && next build",
+    "start": "set NODE_OPTIONS=--openssl-legacy-provider && next start -p 3002"
   },
   "dependencies": {
     "@fontsource/open-sans": "^4.5.1",
