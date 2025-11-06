@@ -1,0 +1,953 @@
+import React, { useState, useEffect } from "react";
+import Modal from "@components/ui/modal/modal";
+import { toast } from "react-toastify";
+import axios from "axios";
+import { ClipboardList } from "lucide-react";
+
+interface CreateIssueModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  order: any;
+  onIssueCreated?: () => void;
+}
+
+const ISSUE_TYPES = [
+  { value: "new", label: "New" },
+  { value: "change_shipping_address", label: "Change Shipping Address" },
+  { value: "change_variation", label: "Change Size/Color/Side" },
+  { value: "replace", label: "Replace" },
+  { value: "merge_order", label: "Merge Orders" },
+];
+
+const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
+  isOpen,
+  onClose,
+  order,
+  onIssueCreated,
+}) => {
+  const [issueType, setIssueType] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [orderDetails, setOrderDetails] = useState<any>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+
+  // JSON Editor for all types
+  const [jsonData, setJsonData] = useState("");
+  const [jsonError, setJsonError] = useState("");
+  
+  // For variation - need to track which product
+  const [selectedProductId, setSelectedProductId] = useState("");
+
+  // Replace - selected fulfillment method
+  const [replaceFulfillMethod, setReplaceFulfillMethod] = useState("");
+
+  // Merge - target order to merge with
+  const [targetOrderNumber, setTargetOrderNumber] = useState("");
+  const [mergeValidation, setMergeValidation] = useState<any>(null);
+  const [mergeableOrders, setMergeableOrders] = useState<any[]>([]);
+  const [loadingMergeableOrders, setLoadingMergeableOrders] = useState(false);
+
+  const [notes, setNotes] = useState("");
+
+  // Existing issues for this order
+  const [existingIssues, setExistingIssues] = useState<any[]>([]);
+  const [openIssue, setOpenIssue] = useState<any>(null);
+
+  // Load order details and existing issues when modal opens
+  useEffect(() => {
+    if (isOpen && order) {
+      loadOrderDetails();
+      loadExistingIssues();
+    }
+  }, [isOpen, order]);
+
+  // Load mergeable orders when issue type is merge_order
+  useEffect(() => {
+    if (issueType === "merge_order" && order) {
+      loadMergeableOrders();
+    }
+  }, [issueType, order]);
+
+  // Auto-select product if only 1 product
+  useEffect(() => {
+    if (issueType === "change_variation" && orderDetails?.order_product) {
+      const products = orderDetails.order_product;
+      if (products.length === 1 && !selectedProductId) {
+        setSelectedProductId(products[0].id);
+      }
+    }
+  }, [issueType, orderDetails]);
+
+  // Load JSON data when issue type or order details change
+  useEffect(() => {
+    if (!orderDetails) return;
+    
+    setJsonError("");
+    
+    if (issueType === "change_shipping_address" && orderDetails.shipping_address) {
+      setJsonData(JSON.stringify(orderDetails.shipping_address, null, 2));
+    } else if (issueType === "change_variation" && selectedProductId) {
+      const product = orderDetails.order_product?.find((p: any) => p.id === selectedProductId);
+      if (product && product.variation) {
+        // Only show name, size, color, side
+        const simplifiedVariation = {
+          name: product.variation.name || "",
+          size: product.variation.size || "",
+          color: product.variation.color || "",
+          side: product.variation.side || ""
+        };
+        setJsonData(JSON.stringify(simplifiedVariation, null, 2));
+      }
+    } else {
+      setJsonData("");
+    }
+  }, [issueType, orderDetails, selectedProductId]);
+
+  const loadOrderDetails = async () => {
+    setLoadingDetails(true);
+    try {
+      const response = await fetch(`/api/orders/get-order-details-simple?order_id=${order.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setOrderDetails(data.order);
+      } else {
+        toast.error(data.error || "Failed to load order details");
+        console.error("API Error:", data);
+      }
+    } catch (error) {
+      console.error("Error loading order details:", error);
+      toast.error("Failed to load order details");
+    } finally {
+      setLoadingDetails(false);
+    }
+  };
+
+  const loadExistingIssues = async () => {
+    try {
+      const response = await fetch(`/api/issues/get-by-order?order_id=${order.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setExistingIssues(data.issues || []);
+        
+        // Find open issue
+        const open = data.issues?.find((issue: any) => issue.status === 'open');
+        if (open) {
+          setOpenIssue(open);
+          // Auto-fill form with open issue data
+          setIssueType(open.issue_type);
+          setNotes(open.notes || "");
+          
+          // Load old_data into JSON editor if available
+          if (open.old_data) {
+            setJsonData(JSON.stringify(open.old_data, null, 2));
+          }
+        }
+      }
+    } catch (error) {
+      console.error("Error loading existing issues:", error);
+    }
+  };
+
+  const loadMergeableOrders = async () => {
+    setLoadingMergeableOrders(true);
+    try {
+      const response = await fetch(`/api/orders/get-mergeable-orders?order_id=${order.id}`);
+      const data = await response.json();
+      
+      if (data.success) {
+        setMergeableOrders(data.orders || []);
+      } else {
+        toast.error("Failed to load mergeable orders");
+      }
+    } catch (error) {
+      console.error("Error loading mergeable orders:", error);
+      toast.error("Failed to load mergeable orders");
+    } finally {
+      setLoadingMergeableOrders(false);
+    }
+  };
+
+  const handleJsonChange = (value: string) => {
+    setJsonData(value);
+    setJsonError("");
+    
+    // Try to validate JSON on change
+    if (value.trim()) {
+      try {
+        JSON.parse(value);
+      } catch (e: any) {
+        setJsonError(e.message);
+      }
+    }
+  };
+
+  // Create issue only (status = open)
+  const handleCreate = async () => {
+    if (!issueType) {
+      toast.error("Please select an issue type");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // For "New" type, just create issue without any updates
+      if (issueType === "new") {
+        const issueResponse = await fetch("/api/issues/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.id,
+            issue_type: issueType,
+            status: "open",
+            old_data: null,
+            new_data: null,
+            notes: notes,
+            created_by: "admin",
+          }),
+        });
+
+        if (!issueResponse.ok) {
+          const errorData = await issueResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${issueResponse.status}: Failed to create issue`);
+        }
+
+        const issueResult = await issueResponse.json();
+        if (!issueResult.success) {
+          throw new Error(issueResult.error || "Failed to create issue");
+        }
+
+        toast.success("Issue created successfully!");
+        if (onIssueCreated) onIssueCreated();
+        handleClose();
+        setLoading(false);
+        return;
+      }
+
+      // For other types, create issue but don't resolve yet
+      const issueResponse = await fetch("/api/issues/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id: order.id,
+          issue_type: issueType,
+          status: "open",
+          old_data: null,
+          new_data: null,
+          notes: notes,
+          created_by: "admin",
+        }),
+      });
+
+      if (!issueResponse.ok) {
+        const errorData = await issueResponse.json().catch(() => ({ error: "HTTP error" }));
+        throw new Error(errorData.error || `HTTP ${issueResponse.status}: Failed to create issue`);
+      }
+
+      const issueResult = await issueResponse.json();
+      if (!issueResult.success) {
+        throw new Error(issueResult.error || "Failed to create issue");
+      }
+
+      toast.success("Issue created successfully!");
+      if (onIssueCreated) onIssueCreated();
+      handleClose();
+    } catch (error: any) {
+      console.error("Error creating issue:", error);
+      toast.error(error.message || "Failed to create issue");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Resolve issue (update data + change status to resolved)
+  const handleResolve = async () => {
+    if (!issueType) {
+      toast.error("Please select an issue type");
+      return;
+    }
+
+    if (issueType === "new") {
+      toast.error('"New" type cannot be resolved, only created');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      let oldData = null;
+      let newData = null;
+
+      // Handle different issue types
+      if (issueType === "change_shipping_address") {
+        // Parse and validate JSON
+        if (!jsonData.trim()) {
+          toast.error("Please enter shipping address data");
+          setLoading(false);
+          return;
+        }
+
+        let parsedData;
+        try {
+          parsedData = JSON.parse(jsonData);
+        } catch (e) {
+          toast.error("Invalid JSON format");
+          setLoading(false);
+          return;
+        }
+
+        // Basic validation
+        if (!parsedData.shipping_name || !parsedData.shipping_address1 || 
+            !parsedData.shipping_city || !parsedData.shipping_zipcode) {
+          toast.error("Missing required fields: shipping_name, shipping_address1, shipping_city, shipping_zipcode");
+          setLoading(false);
+          return;
+        }
+
+        oldData = orderDetails?.shipping_address || null;
+        newData = parsedData;
+
+        // Update shipping address
+        const updateResponse = await fetch("/api/orders/update-shipping-address", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.id,
+            shipping_address: parsedData,
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          const errorData = await updateResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${updateResponse.status}: Failed to update shipping address`);
+        }
+
+        const updateResult = await updateResponse.json();
+        if (!updateResult.success) {
+          throw new Error(updateResult.error || "Failed to update shipping address");
+        }
+      } else if (issueType === "change_variation") {
+        if (!selectedProductId) {
+          toast.error("Please select a product");
+          setLoading(false);
+          return;
+        }
+
+        // Parse and validate JSON
+        if (!jsonData.trim()) {
+          toast.error("Please enter variation data");
+          setLoading(false);
+          return;
+        }
+
+        let parsedData;
+        try {
+          parsedData = JSON.parse(jsonData);
+        } catch (e) {
+          toast.error("Invalid JSON format");
+          setLoading(false);
+          return;
+        }
+
+        // Find selected product
+        const selectedProduct = orderDetails?.order_product?.find(
+          (p: any) => p.id === selectedProductId
+        );
+
+        if (!selectedProduct) {
+          toast.error("Product not found");
+          setLoading(false);
+          return;
+        }
+
+        oldData = selectedProduct.variation || null;
+        newData = parsedData;
+
+        // Update variation - need to merge with existing variation data
+        const existingVariation = selectedProduct.variation || {};
+        const mergedVariation = {
+          ...existingVariation,
+          ...parsedData, // Override with new values
+        };
+
+        const updateResponse = await fetch("/api/orders/update-variation", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_product_id: selectedProductId,
+            variation: mergedVariation,
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          const errorData = await updateResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${updateResponse.status}: Failed to update variation`);
+        }
+
+        const updateResult = await updateResponse.json();
+        if (!updateResult.success) {
+          throw new Error(updateResult.error || "Failed to update variation");
+        }
+      } else if (issueType === "replace") {
+        if (!replaceFulfillMethod) {
+          toast.error("Please select a fulfillment method");
+          setLoading(false);
+          return;
+        }
+
+        // Map fulfillment method to status
+        const statusMap: Record<string, number> = {
+          merchize: 2,
+          mango: 69,
+          burger: 9,
+          fulfil: 8,
+        };
+
+        const newStatus = statusMap[replaceFulfillMethod];
+
+        // Update order status via external API (same as fulfill buttons)
+        try {
+          await axios.put(`https://orders.idreamshirt.com/orders/${order.id}`, {
+            status: newStatus,
+          });
+
+          // Update email_send to 0
+          const emailResponse = await fetch("/api/orders/update-email-sent", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              order_id: order.id,
+              email_send: 0,
+            }),
+          });
+
+          const emailResult = await emailResponse.json();
+          if (!emailResult.success) {
+            throw new Error("Failed to update email_send");
+          }
+
+          oldData = { status: order.status?.id, email_send: order.email_send };
+          newData = { status: newStatus, email_send: 0, method: replaceFulfillMethod };
+        } catch (error: any) {
+          throw new Error(error?.response?.data?.message || error?.message || "Failed to fulfill order");
+        }
+      } else if (issueType === "merge_order") {
+        if (!targetOrderNumber.trim()) {
+          toast.error("Please enter order number to merge");
+          setLoading(false);
+          return;
+        }
+
+        if (!mergeValidation || !mergeValidation.canMerge) {
+          toast.error("Please validate the merge first");
+          setLoading(false);
+          return;
+        }
+
+        // Merge orders
+        const mergeResponse = await fetch("/api/orders/merge", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id_from: targetOrderNumber,
+            order_id_to: order.id,
+          }),
+        });
+
+        if (!mergeResponse.ok) {
+          const errorData = await mergeResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${mergeResponse.status}: Failed to merge orders`);
+        }
+
+        const mergeResult = await mergeResponse.json();
+        if (!mergeResult.success) {
+          throw new Error(mergeResult.error || "Failed to merge orders");
+        }
+
+        oldData = {
+          order1: order.id,
+          order2: targetOrderNumber,
+          total1: mergeValidation.order1?.total,
+          total2: mergeValidation.order2?.total,
+        };
+        newData = {
+          mergedOrderId: order.id,
+          newTotal: mergeResult.newTotal,
+        };
+      }
+
+      // If there's an existing open issue, update it; otherwise create new one
+      if (openIssue) {
+        // Update existing issue to resolved
+        const updateResponse = await fetch("/api/issues/update-status", {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            issue_id: openIssue.id,
+            status: "resolved",
+            new_data: newData,
+            notes: notes,
+          }),
+        });
+
+        if (!updateResponse.ok) {
+          const errorData = await updateResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${updateResponse.status}: Failed to update issue`);
+        }
+
+        const updateResult = await updateResponse.json();
+        if (!updateResult.success) {
+          throw new Error(updateResult.error || "Failed to update issue");
+        }
+      } else {
+        // Create new issue record with status = resolved
+        const issueResponse = await fetch("/api/issues/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.id,
+            issue_type: issueType,
+            status: "resolved",
+            old_data: oldData,
+            new_data: newData,
+            notes: notes,
+            created_by: "admin",
+          }),
+        });
+
+        if (!issueResponse.ok) {
+          const errorData = await issueResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${issueResponse.status}: Failed to create issue`);
+        }
+
+        const issueResult = await issueResponse.json();
+        if (!issueResult.success) {
+          throw new Error(issueResult.error || "Failed to create issue");
+        }
+      }
+
+      toast.success("Issue resolved successfully!");
+      
+      if (onIssueCreated) {
+        onIssueCreated();
+      }
+      
+      handleClose();
+    } catch (error: any) {
+      console.error("Error creating issue:", error);
+      toast.error(error.message || "Failed to create issue");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    setIssueType("");
+    setNotes("");
+    setJsonData("");
+    setJsonError("");
+    setSelectedProductId("");
+    setReplaceFulfillMethod("");
+    setTargetOrderNumber("");
+    setMergeValidation(null);
+    setMergeableOrders([]);
+    setLoadingMergeableOrders(false);
+    setExistingIssues([]);
+    setOpenIssue(null);
+    onClose();
+  };
+
+  const renderJsonEditor = (title: string) => (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-md mb-3">{title}</h3>
+      
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Current Data (JSON) - Edit directly:
+        </label>
+        <textarea
+          value={jsonData}
+          onChange={(e) => handleJsonChange(e.target.value)}
+          rows={12}
+          className={`w-full px-3 py-2 border rounded font-mono text-sm ${
+            jsonError ? 'border-red-500' : 'border-gray-300'
+          }`}
+          placeholder="JSON data will load here..."
+        />
+        {jsonError && (
+          <p className="text-red-500 text-xs mt-1">❌ Invalid JSON: {jsonError}</p>
+        )}
+        {!jsonError && jsonData && (
+          <p className="text-green-600 text-xs mt-1">✓ Valid JSON</p>
+        )}
+      </div>
+    </div>
+  );
+
+  const renderVariationForm = () => {
+    if (!orderDetails?.order_product || orderDetails.order_product.length === 0) {
+      return <div className="text-gray-500">No products found for this order</div>;
+    }
+
+    const products = orderDetails.order_product;
+    const hasMultipleProducts = products.length > 1;
+
+    return (
+      <div className="space-y-3">
+        {hasMultipleProducts && (
+          <div>
+            <label className="block text-sm font-medium mb-2">Select Product *</label>
+            <select
+              value={selectedProductId}
+              onChange={(e) => setSelectedProductId(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+            >
+              <option value="">-- Select Product --</option>
+              {products.map((product: any) => (
+                <option key={product.id} value={product.id}>
+                  {product.variation?.name || `Product #${product.id}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {!hasMultipleProducts && products.length === 1 && (
+          <div className="p-2 bg-gray-50 rounded border">
+            <p className="text-sm text-gray-600">
+              <strong>Product:</strong> {products[0].variation?.name || `Product #${products[0].id}`}
+            </p>
+          </div>
+        )}
+
+        {selectedProductId && renderJsonEditor("Product Variation (Name, Size, Color, Side)")}
+      </div>
+    );
+  };
+
+  const handleValidateMerge = async (orderId: string) => {
+    if (!orderId) {
+      toast.error("Please select an order to merge");
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await fetch("/api/orders/validate-merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          order_id_1: order.id,
+          order_id_2: orderId,
+        }),
+      });
+
+      const result = await response.json();
+      setMergeValidation(result);
+
+      if (!result.canMerge) {
+        toast.error(result.reason || "Cannot merge these orders");
+      } else {
+        toast.success("Orders can be merged!");
+      }
+    } catch (error) {
+      console.error("Error validating merge:", error);
+      toast.error("Failed to validate merge");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleOrderSelect = (orderId: string) => {
+    setTargetOrderNumber(orderId);
+    setMergeValidation(null);
+    if (orderId) {
+      handleValidateMerge(orderId);
+    }
+  };
+
+  const renderMergeForm = () => (
+    <div className="space-y-4">
+      <h3 className="font-semibold text-md mb-3">Merge Orders</h3>
+      
+      <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+        <p className="font-medium text-blue-900 mb-1">Current Order: #{order?.order_num || order?.id}</p>
+        <p className="text-blue-700">Products from target order will be moved to this order</p>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">
+          Select Order to Merge * (Status = 1 + Same Address)
+        </label>
+        {loadingMergeableOrders ? (
+          <div className="flex items-center gap-2 text-gray-600">
+            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <span>Loading mergeable orders...</span>
+          </div>
+        ) : (
+          <>
+            <select
+              value={targetOrderNumber}
+              onChange={(e) => handleOrderSelect(e.target.value)}
+              className="w-full px-3 py-2 border rounded"
+              disabled={loading || mergeableOrders.length === 0}
+            >
+              <option value="">-- Select Order --</option>
+              {mergeableOrders.map((order) => (
+                <option key={order.id} value={order.id}>
+                  #{order.order_num} - ${order.total} - {new Date(order.created_at).toLocaleDateString()}
+                </option>
+              ))}
+            </select>
+            {mergeableOrders.length === 0 && (
+              <p className="text-sm text-gray-500 mt-2">
+                No mergeable orders found (must have status = 1 and same shipping address)
+              </p>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* Validation Result */}
+      {mergeValidation && (
+        <div className={`p-4 rounded border-2 ${
+          mergeValidation.canMerge 
+            ? 'bg-green-50 border-green-500' 
+            : 'bg-red-50 border-red-500'
+        }`}>
+          {mergeValidation.canMerge ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">✅</span>
+                <h4 className="font-bold text-green-900">Orders Can Be Merged</h4>
+              </div>
+              <div className="text-sm space-y-1">
+                <p><strong>Email:</strong> {mergeValidation.order1?.email}</p>
+                <p><strong>Order {mergeValidation.order1?.id} Total:</strong> ${mergeValidation.order1?.total}</p>
+                <p><strong>Order {mergeValidation.order2?.id} Total:</strong> ${mergeValidation.order2?.total}</p>
+                <p className="text-green-800 font-bold pt-2">
+                  <strong>New Total After Merge:</strong> ${mergeValidation.newTotal}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-2xl">❌</span>
+                <h4 className="font-bold text-red-900">Cannot Merge</h4>
+              </div>
+              <p className="text-sm text-red-800">{mergeValidation.reason}</p>
+              {mergeValidation.field && (
+                <div className="text-sm mt-2">
+                  <p><strong>Field:</strong> {mergeValidation.field}</p>
+                  <p><strong>Order 1:</strong> {mergeValidation.value1}</p>
+                  <p><strong>Order 2:</strong> {mergeValidation.value2}</p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderReplaceForm = () => (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-md mb-3">Replace Order - Select Fulfillment Method</h3>
+      
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          onClick={() => setReplaceFulfillMethod("merchize")}
+          className={`px-4 py-3 rounded border-2 transition-all ${
+            replaceFulfillMethod === "merchize"
+              ? "border-green-500 bg-green-50 text-green-700 font-semibold"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+        >
+          Merchize
+        </button>
+
+        <button
+          onClick={() => setReplaceFulfillMethod("mango")}
+          className={`px-4 py-3 rounded border-2 transition-all ${
+            replaceFulfillMethod === "mango"
+              ? "border-orange-500 bg-orange-50 text-orange-700 font-semibold"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+        >
+          Mango
+        </button>
+
+        <button
+          onClick={() => setReplaceFulfillMethod("burger")}
+          className={`px-4 py-3 rounded border-2 transition-all ${
+            replaceFulfillMethod === "burger"
+              ? "border-red-500 bg-red-50 text-red-700 font-semibold"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+        >
+          Burger
+        </button>
+
+        <button
+          onClick={() => setReplaceFulfillMethod("fulfil")}
+          className={`px-4 py-3 rounded border-2 transition-all ${
+            replaceFulfillMethod === "fulfil"
+              ? "border-blue-500 bg-blue-50 text-blue-700 font-semibold"
+              : "border-gray-300 hover:border-gray-400"
+          }`}
+        >
+          Fulfil
+        </button>
+      </div>
+
+      {replaceFulfillMethod && (
+        <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
+          <p className="text-sm text-yellow-800">
+            This will fulfill the order via <strong>{replaceFulfillMethod}</strong> and reset email_sent to 0
+          </p>
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <Modal open={isOpen} onClose={handleClose}>
+      <div className="bg-white rounded-lg shadow-xl w-[75vw] mx-auto">
+        <div className="px-6 py-4 border-b flex items-center gap-3">
+          <ClipboardList className="w-6 h-6 text-blue-600" />
+          <div>
+            <h2 className="text-xl font-semibold">Create Issue</h2>
+            <p className="text-sm text-gray-500">
+              Order #{order?.order_num || order?.tracking_number || order?.id}
+            </p>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 max-h-[70vh] overflow-y-auto">
+          {loadingDetails ? (
+            <div className="flex justify-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : (
+            <>
+              {/* Display Open Issue Info */}
+              {openIssue && (
+                <div className="mb-4 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                  <div className="flex items-start gap-3">
+                    <div className="flex-shrink-0">
+                      <span className="text-2xl">⚠️</span>
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="font-semibold text-yellow-900 mb-2">Open Issue Found</h3>
+                      <div className="space-y-1 text-sm">
+                        <p>
+                          <span className="font-medium">Type:</span>{" "}
+                          <span className="text-yellow-800">
+                            {ISSUE_TYPES.find(t => t.value === openIssue.issue_type)?.label || openIssue.issue_type}
+                          </span>
+                        </p>
+                        {openIssue.notes && (
+                          <p>
+                            <span className="font-medium">Notes:</span>{" "}
+                            <span className="text-yellow-800">{openIssue.notes}</span>
+                          </p>
+                        )}
+                        <p>
+                          <span className="font-medium">Created:</span>{" "}
+                          <span className="text-yellow-800">
+                            {new Date(openIssue.created_at).toLocaleString()}
+                          </span>
+                        </p>
+                      </div>
+                      <p className="text-xs text-yellow-700 mt-2">
+                        The form below is pre-filled with this issue's data. You can update and resolve it.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Issue Type *</label>
+                <select
+                  value={issueType}
+                  onChange={(e) => setIssueType(e.target.value)}
+                  className="w-full px-3 py-2 border rounded"
+                  disabled={loading}
+                >
+                  <option value="">-- Select Issue Type --</option>
+                  {ISSUE_TYPES.map((type) => (
+                    <option key={type.value} value={type.value}>
+                      {type.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {issueType === "change_shipping_address" && renderJsonEditor("Shipping Address")}
+              {issueType === "change_variation" && renderVariationForm()}
+              {issueType === "replace" && renderReplaceForm()}
+              {issueType === "merge_order" && renderMergeForm()}
+
+              {issueType && (
+                <div className="mt-4">
+                  <label className="block text-sm font-medium mb-2">Notes (Optional)</label>
+                  <textarea
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
+                    rows={4}
+                    className="w-full px-3 py-2 border rounded"
+                    placeholder="Add any additional notes..."
+                  />
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="px-6 py-4 border-t flex justify-end gap-3">
+          <button
+            onClick={handleClose}
+            disabled={loading}
+            className="px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleCreate}
+            disabled={loading || !issueType || loadingDetails}
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {loading && (
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+            )}
+            {loading ? "Processing..." : "Create Issue"}
+          </button>
+          
+          {issueType && issueType !== "new" && (
+            <button
+              onClick={handleResolve}
+              disabled={
+                loading || 
+                !issueType || 
+                loadingDetails || 
+                (issueType === "merge_order" && (!mergeValidation || !mergeValidation.canMerge))
+              }
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              )}
+              {loading ? "Processing..." : issueType === "merge_order" ? "Merge Orders" : "Resolve Issue"}
+            </button>
+          )}
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+export default CreateIssueModal;
+

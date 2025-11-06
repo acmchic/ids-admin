@@ -44,10 +44,17 @@ export const useFailedOrders = (refreshInterval: number = 30000) => {
     fetchFailedOrders();
     
     // Only set up interval if refreshInterval > 0
+    let interval: NodeJS.Timeout | null = null;
     if (refreshInterval > 0) {
-      const interval = setInterval(fetchFailedOrders, refreshInterval);
-      return () => clearInterval(interval);
+      interval = setInterval(fetchFailedOrders, refreshInterval);
     }
+    
+    // Always return cleanup function
+    return () => {
+      if (interval) {
+        clearInterval(interval);
+      }
+    };
   }, [refreshInterval]);
 
   return {

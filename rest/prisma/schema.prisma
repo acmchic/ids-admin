@@ -287,6 +287,7 @@ model orders {
   created_at         DateTime?       @db.Timestamp(0)
   updated_at         DateTime?       @db.Timestamp(0)
   order_product      order_product[]
+  issues             issues[]
   orders             orders?         @relation("ordersToorders", fields: [parent_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "orders_parent_id_foreign")
   other_orders       orders[]        @relation("ordersToorders")
   order_status       order_status    @relation(fields: [status], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "orders_status_foreign")
@@ -531,6 +532,25 @@ model user_profiles {
   users       users     @relation(fields: [customer_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "user_profiles_customer_id_foreign")
 
   @@index([customer_id], map: "user_profiles_customer_id_foreign")
+}
+
+model issues {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  order_id     BigInt    @db.UnsignedBigInt
+  issue_type   String
+  status       String    @default("open")
+  old_data     Json?
+  new_data     Json?
+  notes        String?   @db.Text
+  created_by   String?
+  resolved_at  DateTime? @db.Timestamp(0)
+  created_at   DateTime? @db.Timestamp(0)
+  updated_at   DateTime? @db.Timestamp(0)
+  orders       orders    @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "issues_order_id_foreign")
+
+  @@index([order_id], map: "issues_order_id_foreign")
+  @@index([status], map: "issues_status_index")
+  @@index([issue_type], map: "issues_issue_type_index")
 }
 
 model users {

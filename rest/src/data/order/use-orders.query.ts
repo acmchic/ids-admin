@@ -1,7 +1,6 @@
 import { QueryParamsType, QueryOptionsType } from "@ts-types/custom.types";
 import { mapPaginatorData } from "@utils/data-mappers";
 import { useQuery } from "react-query";
-import Orders from "@repositories/type";
 import { API_ENDPOINTS } from "@utils/api/endpoints";
 
 const fetchOrders = async ({ queryKey }: QueryParamsType) => {
@@ -15,6 +14,7 @@ const fetchOrders = async ({ queryKey }: QueryParamsType) => {
     date,
     status,
     status_in,
+    shop_id,
   } = params as QueryOptionsType;
 
   const urlParams = new URLSearchParams();
@@ -23,17 +23,24 @@ const fetchOrders = async ({ queryKey }: QueryParamsType) => {
   if (date) urlParams.append("date", date);
   if (status !== undefined) urlParams.append("status", String(status));
   if (status_in !== undefined) urlParams.append("status_in", String(status_in));
+  if (shop_id !== undefined) urlParams.append("shop_id", String(shop_id));
 
   urlParams.append("page", String(page));
   urlParams.append("limit", String(limit));
   urlParams.append("orderBy", orderBy);
   urlParams.append("sortedBy", sortedBy);
 
-  const url = `${API_ENDPOINTS.ORDERS}?${urlParams.toString()}`;
+  // Call internal Next.js API instead of external API
+  const url = `/api/orders/list?${urlParams.toString()}`;
 
-  const {
-    data: { data, ...rest },
-  } = await Orders.all(url);
+  const response = await fetch(url);
+  const responseData = await response.json();
+
+  if (!response.ok) {
+    throw new Error(responseData.error || 'Failed to fetch orders');
+  }
+
+  const { data, ...rest } = responseData;
 
   return {
     orders: {

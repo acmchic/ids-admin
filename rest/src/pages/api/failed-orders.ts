@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
+import os from 'os';
 
 interface FailedOrder {
   order_id: string;
@@ -13,11 +14,26 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  const startTime = Date.now();
+
   try {
-    // Path to Laravel log file (local development)
+    // Skip on Windows - Laravel log path is macOS specific
+    if (os.platform() === 'win32') {
+      console.log(`⏱️ /api/failed-orders: ${Date.now() - startTime}ms (Windows - skipped)`);
+      return res.status(200).json({ 
+        success: true,
+        failed_orders: [],
+        count: 0,
+        message: 'Skipped on Windows'
+      });
+    }
+
+    // Path to Laravel log file (local development - macOS)
     const logPath = '/Users/ac/workspace/ids/orders/storage/logs/laravel.log';
     
+    // Quick check - return immediately if file doesn't exist
     if (!fs.existsSync(logPath)) {
+      console.log(`⏱️ /api/failed-orders: ${Date.now() - startTime}ms (no file)`);
       return res.status(200).json({ 
         success: true,
         failed_orders: [],
@@ -72,6 +88,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       )
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 10); // Limit to 10 most recent
+
+    console.log(`⏱️ /api/failed-orders: ${Date.now() - startTime}ms (${uniqueFailedOrders.length} failures)`);
 
     res.status(200).json({
       success: true,

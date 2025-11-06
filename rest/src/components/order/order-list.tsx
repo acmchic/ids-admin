@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import Image from "next/dist/client/image";
@@ -17,12 +17,14 @@ import Pagination from "@components/ui/pagination";
 import ActionButtons from "@components/common/action-buttons";
 import TitleWithSort from "@components/ui/title-with-sort";
 import Link from "@components/ui/link";
-import { PacmanLoader } from "react-spinners";
+import { ClockLoader } from "react-spinners";
 
 import { useIsRTL } from "@utils/locals";
 import { UsState } from "../../utils/us-states";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Search } from "lucide-react";
 import { getApiUrl } from "../../config/api";
+import CreateIssueModal from "./create-issue-modal";
+import { validateZipcode } from "../../utils/zipcode-validator";
 
 import {
   OrderPaginator,
@@ -106,14 +108,15 @@ const getOriginalArtworkUrl = (pivotImgUrl: string): string => {
 };
 
 
-const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps) => {
+const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   const { data, paginatorInfo } = orders ?? {};
   const { t } = useTranslation();
   const router = useRouter();
   const { alignLeft } = useIsRTL();
   
   // Hook to get failed orders - no auto refresh
-  const { failedOrders, loading: failedOrdersLoading, refetch } = useFailedOrders(0);
+  // Note: Only call this hook once at the top level
+  const { failedOrders = [], loading: failedOrdersLoading = false } = useFailedOrders(0);
 
   // Function to check if order is in failed orders list
   const isFailedOrder = (orderNum: string) => {
@@ -149,6 +152,14 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   
+  // Create Issue Modal state
+  const [isIssueModalOpen, setIsIssueModalOpen] = useState(false);
+  const [selectedOrderForIssue, setSelectedOrderForIssue] = useState<any>(null);
+  
+  // Issue stats state
+  const [issueStats, setIssueStats] = useState<{ openCount: number; orderIds: string[] }>({ openCount: 0, orderIds: [] });
+  const [showOpenIssues, setShowOpenIssues] = useState(false);
+  
   // State for fulfill progress
   const [fulfillProgress, setFulfillProgress] = useState<{
     isProcessing: boolean;
@@ -162,79 +173,81 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
     total: 0
   });
 
-  // Function to select all G orders today
+  const loadIssueStats = useCallback(async () => {
+    try {
+      const response = await fetch('/api/issues/stats');
+      const result = await response.json();
+      if (result.success) {
+        setIssueStats({
+          openCount: result.openCount,
+          orderIds: result.orderIds,
+        });
+      }
+    } catch (error) {
+      console.error('Failed to load issue stats:', error);
+    }
+  }, []);
+
+  // Load issue stats
+  useEffect(() => {
+    loadIssueStats();
+  }, [loadIssueStats]);
+
+  const handleToggleOpenIssues = () => {
+    setShowOpenIssues(!showOpenIssues);
+  };
+
+  // Filter displayed orders based on showOpenIssues - wrapped in useMemo
+  const displayedOrders = useMemo(() => {
+    if (showOpenIssues && issueStats.orderIds.length > 0) {
+      return data?.filter(order => issueStats.orderIds.includes(String(order.id)));
+    }
+    return data;
+  }, [showOpenIssues, issueStats.orderIds, data]);
+
+  // Function to select all G orders with status = 1
   const handleSelectAllG = () => {
-    const today = new Date();
-    const todayStr = format(today, "yyyy-MM-dd"); // Same logic as Today button
-    
-    console.log('Debug All G - Today:', todayStr);
-    console.log('Debug All G - Total orders:', data?.length);
-    
-    const todayOrdersWithStatus1 = data?.filter(order => {
-      const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
-      const hasStatus1 = order.status?.id === 1;
-      const isToday = orderDate === todayStr;
-      
-      console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
-      
-      return isToday && hasStatus1;
+    const ordersWithStatus1 = data?.filter(order => {
+      return order.status?.id === 1;
     }) || [];
     
-    console.log(`Found ${todayOrdersWithStatus1.length} orders with status 1 (Order Received) today for G fulfill`);
-    
     const newSelections: Record<string, number> = {};
-    todayOrdersWithStatus1.forEach(order => {
+    ordersWithStatus1.forEach(order => {
       newSelections[order.id] = 2; // G status
     });
     setSelectedOrders(newSelections);
+    
+    console.log(`✅ All G: Selected ${ordersWithStatus1.length} orders with status = 1`);
   };
 
-  // Function to select all B orders today  
+  // Function to select all B orders with status = 1
   const handleSelectAllB = () => {
-    const today = new Date();
-    const todayStr = format(today, "yyyy-MM-dd"); // Same logic as Today button
-    
-    const todayOrdersWithStatus1 = data?.filter(order => {
-      const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
-      const hasStatus1 = order.status?.id === 1;
-      const isToday = orderDate === todayStr;
-      
-      console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
-      
-      return isToday && hasStatus1;
+    const ordersWithStatus1 = data?.filter(order => {
+      return order.status?.id === 1;
     }) || [];
     
-    console.log(`Found ${todayOrdersWithStatus1.length} orders with status 1 (Order Received) today for B fulfill`);
-    
     const newSelections: Record<string, number> = {};
-    todayOrdersWithStatus1.forEach(order => {
+    ordersWithStatus1.forEach(order => {
       newSelections[order.id] = 9; // B status
     });
     setSelectedOrders(newSelections);
+    
+    console.log(`✅ All B: Selected ${ordersWithStatus1.length} orders with status = 1`);
   };
 
-  // Function to select all M orders today  
+  // Function to select all M orders with status = 1 or 78
   const handleSelectAllM = () => {
-    const today = new Date();
-    const todayStr = format(today, "yyyy-MM-dd"); // Same logic as Today button
-    
-    const todayOrdersWithStatus1 = data?.filter(order => {
-      const orderDate = format(new Date(order.created_at), "yyyy-MM-dd");
-      const hasStatus1 = order.status?.id === 1 || order.status?.id === 78;
-      const isToday = orderDate === todayStr;
-      
-      console.log(`Order ${order.id}: date=${orderDate}, status=${order.status?.id} (${order.status?.name}), isToday=${isToday}, hasStatus1=${hasStatus1}`);
-      
-      return isToday && hasStatus1;
+    const ordersWithStatus = data?.filter(order => {
+      return order.status?.id === 1 || order.status?.id === 78;
     }) || [];
     
-    console.log(`Found ${todayOrdersWithStatus1.length} orders with status 1 (Order Received) today for M fulfill`);
-    
     const newSelections: Record<string, number> = {};
-    todayOrdersWithStatus1.forEach(order => {
+    ordersWithStatus.forEach(order => {
       newSelections[order.id] = 69; // M status
     });
     setSelectedOrders(newSelections);
+    
+    console.log(`✅ All M: Selected ${ordersWithStatus.length} orders with status = 1 or 78`);
   };
 
   const onHeaderClick = (column: string | null) => ({
@@ -393,15 +406,6 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       formData.append('path', imagePath);
       formData.append('fileName', decodedFileName);
 
-      console.log('🔥 ORDER LIST UPLOAD DEBUG:', {
-        productId,
-        imagePath,
-        originalFileName: fileName,
-        decodedFileName: decodedFileName,
-        fileSize: file.size,
-        fileType: file.type
-      });
-
       const response = await fetch('/api/upload-image', {
         method: 'POST',
         body: formData,
@@ -416,19 +420,11 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
 
       const result = await response.json();
 
-      console.log('🔥 ORDER LIST UPLOAD RESPONSE:', {
-        status: response.status,
-        ok: response.ok,
-        result
-      });
-
       if (response.ok) {
         if (result.isReplacing) {
           toast.success('Upload thành công! Đã thay thế ảnh artwork.');
-          console.log('✅ Replaced existing file:', fileName);
         } else {
           toast.success(`Upload thành công! File ảnh khác tên - đã upload với tên mới: ${result.finalFileName}`);
-          console.log('✅ Uploaded new file:', result.finalFileName);
         }
         // Không reload trang, chỉ show thông báo thành công
       } else {
@@ -461,69 +457,87 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       width: 200,
       render: (_: any, row: any) => {
         const hasClassicTee = row.products?.some((product: any) => {
-          const variant = product.pivot?.variation
-            ? JSON.parse(product.pivot.variation)
-            : null;
+          const variant = (typeof product.pivot?.variation === 'string') 
+            ? JSON.parse(product.pivot.variation) 
+            : (product.pivot?.variation || null);
           const variantName = nameToSlug(variant?.name || "");
           return variantName.includes("classic-t-shirt");
         });
 
         return (
-          <div className="flex flex-row justify-center gap-2">
-            {/* G Button */}
-            <button
-              onClick={() =>
-                setSelectedOrders(prev => ({ ...prev, [row.id]: 2 }))
-              }
-              className={`px-3 py-2 rounded-md border text-white bg-blue-500 hover:bg-blue-600 text-sm ${selectedOrders[row.id] === 2
-                  ? 'ring-2 ring-offset-1 ring-blue-300'
-                  : ''
-                }`}
-            >
-              G
-            </button>
+          <div className="flex flex-col justify-center gap-2">
+            {/* Row 1: Fulfill buttons */}
+            <div className="flex flex-row justify-center gap-2">
+              {/* G Button */}
+              <button
+                onClick={() =>
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: 2 }))
+                }
+                className={`px-3 py-2 rounded-md border text-white bg-blue-500 hover:bg-blue-600 text-sm ${selectedOrders[row.id] === 2
+                    ? 'ring-2 ring-offset-1 ring-blue-300'
+                    : ''
+                  }`}
+              >
+                G
+              </button>
+              
+              {/* B Button */}
+              <button
+                onClick={() =>
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: 9 }))
+                }
+                className={`px-3 py-2 rounded-md border text-white bg-red-500 hover:bg-red-600 text-sm ${selectedOrders[row.id] === 9
+                    ? 'ring-2 ring-offset-1 ring-red-300'
+                    : ''
+                  }`}
+              >
+                B
+              </button>
+              
+              {/* M Button */}
+              <button
+                onClick={() =>
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: 69 }))
+                }
+                className={`px-3 py-2 rounded-md border text-white bg-green-500 hover:bg-green-600 text-sm ${selectedOrders[row.id] === 69
+                    ? 'ring-2 ring-offset-1 ring-green-300'
+                    : ''
+                  }`}
+              >
+                M
+              </button>
+              
+              {/* Clear button */}
+              {selectedOrders[row.id] && (
+                <button
+                  onClick={() => {
+                    setSelectedOrders(prev => {
+                      const newSelections = { ...prev };
+                      delete newSelections[row.id];
+                      return newSelections;
+                    });
+                  }}
+                  className="px-2 py-2 rounded-md border text-white bg-gray-500 hover:bg-gray-600 text-sm"
+                  title="Clear selection for this order"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
             
-            {/* B Button */}
-            <button
-              onClick={() =>
-                setSelectedOrders(prev => ({ ...prev, [row.id]: 9 }))
-              }
-              className={`px-3 py-2 rounded-md border text-white bg-red-500 hover:bg-red-600 text-sm ${selectedOrders[row.id] === 9
-                  ? 'ring-2 ring-offset-1 ring-red-300'
-                  : ''
-                }`}
-            >
-              B
-            </button>
-            
-            {/* M Button - Clone from B button */}
-            <button
-              onClick={() =>
-                setSelectedOrders(prev => ({ ...prev, [row.id]: 69 }))
-              }
-              className={`px-3 py-2 rounded-md border text-white bg-green-500 hover:bg-green-600 text-sm ${selectedOrders[row.id] === 69
-                  ? 'ring-2 ring-offset-1 ring-green-300'
-                  : ''
-                }`}
-            >
-              M
-            </button>
-            {/* Clear button for this row */}
-            {selectedOrders[row.id] && (
+            {/* Row 2: Create Issue Button */}
+            <div className="flex justify-center mt-5">
               <button
                 onClick={() => {
-                  setSelectedOrders(prev => {
-                    const newSelections = { ...prev };
-                    delete newSelections[row.id];
-                    return newSelections;
-                  });
+                  setSelectedOrderForIssue(row);
+                  setIsIssueModalOpen(true);
                 }}
-                className="px-2 py-2 rounded-md border text-white bg-gray-500 hover:bg-gray-600 text-sm"
-                title="Clear selection for this order"
+                className="px-2 py-1 rounded-md border text-white bg-purple-500 hover:bg-purple-600 text-xs inline-flex items-center gap-1"
+                title="Create Issue"
               >
-                ✕
+                📋 Issue
               </button>
-            )}
+            </div>
           </div>
         );
       },
@@ -547,6 +561,10 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         const stateNames = UsState();
         const stateFullName = stateNames[provinceCode as keyof typeof stateNames] || provinceCode;
 
+        // Validate zipcode
+        const zipcodeValidation = validateZipcode(zipcode, provinceCode);
+        const hasZipcodeError = zipcodeValidation.isSuspicious || !zipcodeValidation.isValid;
+
         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
           `${street}, ${city}, ${zipcode}, ${stateFullName} (US)`
         )}`;
@@ -560,6 +578,9 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
         const orderLabel = orderCount === 1 ? "" : `${orderCount}th Order`;
 
         const isFailed = isFailedOrder(record.order_num);
+        
+        // Type assertion for shipping_address fields
+        const shippingAddr = shipping_address as any;
 
         const handleCopyOrderNum = () => {
           if (record.order_num) {
@@ -614,48 +635,52 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
               {shippingMethod === "express" && (
                 <p className="text-xs text-red-600 pt-6 font-semibold uppercase">Express Shipping</p>
               )}
-              {shipping_address.design_note && (
+              {shippingAddr.design_note && (
                 <p className="text-xs text-red-600 pt-2 font-semibold break-words">
-                  📝 NOTES: {shipping_address.design_note.slice(0, 30)}{shipping_address.design_note.length > 30 ? '...' : ''}
+                  📝 NOTES: {shippingAddr.design_note.slice(0, 30)}{shippingAddr.design_note.length > 30 ? '...' : ''}
                 </p>
               )}
             </div>
 
-            <Link
-              href={googleMapsUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="hover:underline text-xs text-black"
-            >
-              {stateFullName}
-            </Link>
+            <div className="flex items-center gap-2">
+              <Link
+                href={googleMapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`hover:underline text-xs ${
+                  hasZipcodeError ? 'text-red-600 font-bold' : 'text-black'
+                }`}
+              >
+                {stateFullName} {zipcode && `(${zipcode})`}
+              </Link>
+              
+              {hasZipcodeError && (
+                <span 
+                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-300"
+                  title={zipcodeValidation.reason || 'Zipcode may be incorrect'}
+                >
+                  ⚠️ ZIP
+                </span>
+              )}
+            </div>
+            
+            {hasZipcodeError && zipcode && (
+              <div className="mt-1 p-2 bg-yellow-50 border border-yellow-300 rounded text-xs">
+                <p className="text-yellow-800 font-semibold">⚠️ Zipcode Warning:</p>
+                <p className="text-yellow-700">
+                  Current: <span className="font-mono">{zipcode}</span>
+                  {zipcodeValidation.suggestedZipcode && (
+                    <> - Suggested: <span className="font-mono font-bold">{zipcodeValidation.suggestedZipcode}</span></>
+                  )}
+                </p>
+                {zipcodeValidation.reason && (
+                  <p className="text-yellow-600 text-xs mt-1">{zipcodeValidation.reason}</p>
+                )}
+              </div>
+            )}
           </div>
         );
       },
-    },
-    {
-      title: "ID",
-      dataIndex: "products",
-      key: "products",
-      align: "center",
-      width: 100,
-      render: (products: any[]) => (
-        <div className="flex flex-col gap-2">
-          {products.map((product, index) => (
-            <div key={`${product.id}-${index}`} className="mb-2 text-center">
-              <p>{product.id}</p>
-              {product.image?.original && (
-                <p
-                  className={`mt-1 text-md ${product.id > 104585 ? "text-red-500" : ""
-                    }`}
-                >
-                  {product.image.original.split("/").slice(0, 2).join("/")}
-                </p>
-              )}
-            </div>
-          ))}
-        </div>
-      ),
     },
 
 
@@ -668,17 +693,32 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
       render: (products: any[]) => (
         <div className="flex flex-col gap-2">
           {products.map((product, index) => {
-            const variant = product.pivot?.variation
+            const variant = (typeof product.pivot?.variation === 'string')
               ? JSON.parse(product.pivot.variation)
-              : null;
+              : (product.pivot?.variation || null);
 
             const variantName = nameToSlug(variant?.name ?? "");
-            const color = nameToSlug(variant?.color ?? "");
-            const size = nameToSlug(variant?.size ?? "");
+            const color = variant?.color ?? "";
+            const size = variant?.size ?? "";
             const side = variant?.side ?? "";
 
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
+                {/* Icon Search Google Images ở trên cùng */}
+                <div className="flex justify-center mb-1">
+                  <button
+                    onClick={() => {
+                      const searchQuery = `${product.name || variant?.name || ''} T-shirt`;
+                      const googleImagesUrl = `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}&tbm=isch`;
+                      window.open(googleImagesUrl, '_blank');
+                    }}
+                    className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                    title="Search on Google Images"
+                  >
+                    <Search className="w-4 h-4 text-gray-600 hover:text-blue-600" />
+                  </button>
+                </div>
+
                 {/* Hiển thị impress & click */}
                 <p className="text-xs text-gray-700">
                   Imp: {product.impressions ?? 0} | Click: {product.clicks ?? 0}
@@ -687,21 +727,25 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 {/* Tên sản phẩm (có link) */}
                 <p
                   className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
-                  onClick={() =>
-                    window.open(
-                      `https://idreamshirt.com/products/${product.slug}/${variantName}-${color}-size_${size}`,
-                      "_blank"
-                    )
-                  }
+                  onClick={() => {
+                    if (product.slug) {
+                      window.open(
+                        `https://idreamshirt.com/products/${product.slug}/${variantName}-${nameToSlug(color)}-size_${size}`,
+                        "_blank"
+                      );
+                    }
+                  }}
                 >
-                  {product.name.length > 20
+                  {product.name && product.name.length > 20
                     ? `${product.name.slice(0, 20)}...`
-                    : product.name}
+                    : product.name || 'Unknown Product'}
                 </p>
 
-                {/* Hiển thị side và size */}
-                {side && (
-                  <p className="text-xs text-gray-500 pt-2">{side}/{size}</p>
+                {/* Hiển thị Color - Size - Side trên 1 dòng */}
+                {(side || size || color) && (
+                  <p className="text-xs text-gray-600 pt-2 font-medium">
+                    {[color, size?.toUpperCase(), side].filter(Boolean).join(' - ')}
+                  </p>
                 )}
               </div>
             );
@@ -724,10 +768,24 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             const upscaylImage = product.pivot?.upscayl_image || null;
 
             return (
-              <div key={`${product.id}-${index}`} className="mb-2 text-center">
+              <div key={`${product.id}-${index}`} className="mb-2 text-center relative">
+                {/* Product ID Text - Click to copy */}
+                <div className="mb-1">
+                  <span 
+                    onClick={() => {
+                      navigator.clipboard.writeText(String(product.id));
+                      toast.success(`Copied ID: ${product.id}`);
+                    }}
+                    className="text-sm font-bold text-gray-700 cursor-pointer hover:text-blue-600 transition-colors"
+                    title="Click to copy ID"
+                  >
+                    {product.id}
+                  </span>
+                </div>
+                
                 <Image
                   src={imgUrl}
-                  alt={product.name}
+                  alt={product.name || 'Product'}
                   width={100}
                   height={100}
                   className="rounded-md"
@@ -790,7 +848,9 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             if (product.is_customize && product.image) {
               // Customize product - get image from products_customize table
               try {
-                const images = JSON.parse(product.image);
+                const images = (typeof product.image === 'string') 
+                  ? JSON.parse(product.image)
+                  : product.image;
                 
                 if (images && images.length > 0 && images[0].original) {
                   const originalPath = images[0].original;
@@ -806,18 +866,79 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             
             // Regular product - use product.img_url
             if (!displayImgUrl) {
-              displayImgUrl = product.img_url || "";
-              linkUrl = product.img_url || "";
+              let imgUrl = product.img_url || "";
+              
+              // Replace /_front/ or /_back/ with /atwork/ for display (detect position after /media/XXXX/)
+              if (imgUrl && imgUrl.includes('/media/')) {
+                const parts = imgUrl.split('/');
+                const mediaIndex = parts.findIndex(p => p === 'media');
+                
+                // Position after /media/3600/ is index + 2
+                if (mediaIndex !== -1 && parts.length > mediaIndex + 2) {
+                  const targetIndex = mediaIndex + 2;
+                  // Replace if starts with underscore (like _front, _back)
+                  if (parts[targetIndex] && parts[targetIndex].startsWith('_')) {
+                    parts[targetIndex] = 'atwork';
+                    imgUrl = parts.join('/');
+                  }
+                }
+              }
+              
+              displayImgUrl = imgUrl;
+              
+              // For linkUrl (click): Convert media/3600/atwork/dark-grey → images
+              // Example: http://localhost:3007/media/3600/atwork/dark-grey/ids/gmc/file.webp
+              //       → http://localhost:3007/images/ids/gmc/file.webp
+              linkUrl = imgUrl;
+              if (imgUrl && imgUrl.includes('/media/')) {
+                const parts = imgUrl.split('/');
+                const mediaIndex = parts.findIndex(p => p === 'media');
+                
+                // Take parts after /media/3600/atwork/dark-grey/ (index + 4 onwards)
+                if (mediaIndex !== -1 && parts.length > mediaIndex + 4) {
+                  const pathAfterColor = parts.slice(mediaIndex + 4).join('/');
+                  const baseUrl = imgUrl.split('/media/')[0];
+                  linkUrl = `${baseUrl}/images/${pathAfterColor}`;
+                }
+              }
             }
 
             function getImageFolderPath(url?: string): string {
               if (!url) return "CUSTOMIZE"
-              const afterImages = url.split("images/")[1] || ""
-              const pathParts = afterImages.split("/")
-              return pathParts.slice(0, 2).join("/")
+              
+              // For media URLs: http://localhost:3007/media/3600/atwork/dark-grey/ids/gmc/file.webp
+              // For images URLs: http://localhost:3007/images/ids/gmc/file.webp
+              
+              if (url.includes("/images/")) {
+                // Extract after /images/
+                const afterImages = url.split("/images/")[1];
+                if (!afterImages) return "N/A";
+                
+                // Take first 2 parts: ids/gmc
+                const parts = afterImages.split("/");
+                return parts.slice(0, 2).join("/") || "N/A";
+              }
+              
+              if (url.includes("/media/")) {
+                // Extract after /media/
+                const afterMedia = url.split("/media/")[1];
+                if (!afterMedia) return "N/A";
+                
+                // Format: 3600/atwork/dark-grey/ids/gmc/file.webp
+                // Index:  0    1      2          3   4    5
+                // Want: ids/gmc (index 3-4)
+                const parts = afterMedia.split("/");
+                const path = parts.slice(3, 5).join("/");
+                
+                if (!path || path === "/") return "N/A";
+                return path;
+              }
+              
+              return "N/A";
             }
             
-            const folderPath = getImageFolderPath(linkUrl)
+            const folderPath = getImageFolderPath(displayImgUrl)
+            const isCustomizeProduct = product.is_customize === 1 || product.is_customize === true || isCustomize;
 
 
             if (!displayImgUrl) {
@@ -836,8 +957,18 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
             return (
               <div
                 key={`${product.id}-${index}`}
-                className="mb-2 text-center"
+                className={`mb-2 text-center p-2 rounded ${
+                  isCustomizeProduct ? 'bg-yellow-100 border-2 border-yellow-400' : ''
+                }`}
               >
+                {isCustomizeProduct && (
+                  <div className="mb-1">
+                    <span className="inline-block px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded shadow-md">
+                      CUSTOMIZE
+                    </span>
+                  </div>
+                )}
+                
                 <div className="inline-block transition-transform transform hover:scale-150 relative">
                   <a
                     href={linkUrl}
@@ -854,16 +985,9 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                   </a>
                 </div>
 
-                <p
-                    className={`text-sm font-mono ${folderPath.toLowerCase().includes("customize") || isCustomize
-                        ? "text-blue-500 font-bold animate-pulse"
-                        : "text-gray-600"
-                      }`}
-                  >
-                    {folderPath.toLowerCase().includes("customize") || isCustomize
-                      ? folderPath.toUpperCase()
-                      : folderPath}
-                  </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  {folderPath || 'N/A'}
+                </p>
 
                 {/* Upload Button - Moved below text */}
                 {(() => {
@@ -1203,7 +1327,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-500 hover:bg-green-600 transition"
               >
                 {loadingRows[`merchize-${id}`] ? (
-                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`merchize-${id}`]} />
+                  <ClockLoader size={15} color="#fff" loading={loadingRows[`merchize-${id}`]} />
                 ) : (
                   ''
                 )}
@@ -1217,7 +1341,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-600 hover:bg-green-700 transition font-semibold"
               >
                 {loadingRows[`mango-${id}`] ? (
-                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`mango-${id}`]} />
+                  <ClockLoader size={15} color="#fff" loading={loadingRows[`mango-${id}`]} />
                 ) : (
                   <span className="text-lg">🥭</span>
                 )}
@@ -1231,7 +1355,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition"
               >
                 {loadingRows[`burger-${id}`] ? (
-                  <PacmanLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
+                  <ClockLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
                 ) : (
                   ''
                 )}
@@ -1244,7 +1368,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
                 className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-blue-500 hover:bg-blue-600 transition"
               >
                 {loadingRows[id] ? (
-                  <PacmanLoader size={15} color="#fff" loading={loadingRows[id]} />
+                  <ClockLoader size={15} color="#fff" loading={loadingRows[id]} />
                 ) : (
                   <BiSolidTShirt />
                 )}
@@ -1292,6 +1416,31 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           </div>
         </div>
       )}
+
+      {/* Issue Stats Card */}
+      <div className="mb-4">
+        <div 
+          onClick={handleToggleOpenIssues}
+          className={`inline-flex items-center gap-3 px-4 py-3 rounded-lg cursor-pointer transition-all ${
+            showOpenIssues 
+              ? 'bg-red-100 border-2 border-red-500 shadow-md' 
+              : 'bg-orange-50 border border-orange-200 hover:bg-orange-100'
+          }`}
+        >
+          <div className="flex items-center justify-center w-10 h-10 bg-orange-500 rounded-full">
+            <span className="text-white font-bold text-lg">⚠️</span>
+          </div>
+          <div>
+            <p className="text-sm text-gray-600 font-medium">Open Issues</p>
+            <p className="text-2xl font-bold text-orange-600">{issueStats.openCount}</p>
+          </div>
+          {showOpenIssues && (
+            <div className="ml-2 px-2 py-1 bg-red-500 text-white text-xs rounded font-semibold">
+              FILTERING
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Selection Controls */}
       <div className="mb-4 flex flex-wrap gap-4 items-center">
@@ -1373,7 +1522,7 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           //@ts-ignore
           columns={columns}
           emptyText={t("table:empty-table-data")}
-          data={data}
+          data={displayedOrders}
           rowKey="id"
           scroll={{ x: 1000 }}
           expandable={{ expandIconColumnIndex: -1 }}
@@ -1404,9 +1553,24 @@ const OrderList = React.memo(({ orders, onPagination, onSort, onOrder }: IProps)
           />
         </div>
       )}
+
+      {/* Create Issue Modal */}
+      {selectedOrderForIssue && (
+        <CreateIssueModal
+          isOpen={isIssueModalOpen}
+          onClose={() => {
+            setIsIssueModalOpen(false);
+            setSelectedOrderForIssue(null);
+          }}
+          order={selectedOrderForIssue}
+          onIssueCreated={() => {
+            // Reload issue stats after creating/resolving issue
+            loadIssueStats();
+          }}
+        />
+      )}
     </>
   );
-
-});
+};
 
 export default OrderList;

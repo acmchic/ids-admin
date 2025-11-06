@@ -32,7 +32,17 @@ const AppSettings: React.FC = (props) => {
 const CustomApp = ({ Component, pageProps }: AppProps) => {
   const queryClientRef = useRef<any>(null);
   if (!queryClientRef.current) {
-    queryClientRef.current = new QueryClient();
+    queryClientRef.current = new QueryClient({
+      defaultOptions: {
+        queries: {
+          refetchOnWindowFocus: false,
+          refetchOnReconnect: false,
+          refetchOnMount: true,
+          retry: 1,
+          staleTime: 5 * 60 * 1000, // 5 minutes
+        },
+      },
+    });
   }
   const Layout = (Component as any).Layout || Noop;
   const authProps = (Component as any).authenticate;

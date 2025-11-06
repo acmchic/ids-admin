@@ -2,7 +2,7 @@ import Card from "@components/common/card";
 import Layout from "@components/layouts/admin";
 import Search from "@components/common/search";
 import OrderList from "@components/order/order-list";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 import ErrorMessage from "@components/ui/error-message";
 import Loader from "@components/ui/loader/loader";
 import { useOrdersQuery } from "@data/order/use-orders.query";
@@ -13,8 +13,9 @@ import { adminOnly } from "@utils/auth-utils";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
-import { DollarSign, PackageCheck, ClipboardCopy } from "lucide-react";
+import { DollarSign, PackageCheck, ClipboardCopy, TrendingUp } from "lucide-react";
 import { toast } from "react-toastify";
+import StickerCard from "@components/widgets/sticker-card";
 
 export default function Orders() {
   const { t } = useTranslation();
@@ -30,6 +31,9 @@ export default function Orders() {
   const [isTodayFilter, setIsTodayFilter] = useState(false);
   const [isYesterdayFilter, setIsYesterdayFilter] = useState(false);
 
+  // Stats for cards
+  const [todayStats, setTodayStats] = useState({ count: 0, total: 0 });
+  const [yesterdayStats, setYesterdayStats] = useState({ count: 0, total: 0 });
 
   const { data, isLoading, error } = useOrdersQuery({
     limit,
@@ -43,17 +47,52 @@ export default function Orders() {
   const totalTodayCount = todayOrders.length;
   const totalTodayAmount = todayOrders.reduce((sum, order) => sum + (Number(order.paid_total) || 0), 0);
 
-  if (isLoading) return <Loader text={t("common:text-loading")} />;
-  if (error) return <ErrorMessage message={error.message} />;
+  // Load stats for today and yesterday - OPTIMIZED
+  useEffect(() => {
+    const loadStats = async () => {
+      const today = format(new Date(), "yyyy-MM-dd");
+      const yesterday = format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
 
-  const handleSearch = ({ searchText }: { searchText: string }) => {
+      try {
+        // Fetch both stats in parallel using lightweight API
+        const [todayRes, yesterdayRes] = await Promise.all([
+          fetch(`/api/orders/stats?date=${today}`),
+          fetch(`/api/orders/stats?date=${yesterday}`)
+        ]);
+
+        const [todayData, yesterdayData] = await Promise.all([
+          todayRes.json(),
+          yesterdayRes.json()
+        ]);
+
+        if (todayData.success) {
+          setTodayStats({ count: todayData.count, total: todayData.total });
+        }
+
+        if (yesterdayData.success) {
+          setYesterdayStats({ count: yesterdayData.count, total: yesterdayData.total });
+        }
+      } catch (error) {
+        console.error('❌ Failed to load stats:', error);
+      }
+    };
+
+    loadStats();
+  }, []);
+
+  // Define callbacks BEFORE early returns (hooks must be called in same order every render)
+  const handleSearch = useCallback(({ searchText }: { searchText: string }) => {
     setPage(1);
     setFilters((prev) => ({ ...prev, text: searchText }));
-  };
+  }, []);
 
-  const handlePagination = (current: number) => {
+  const handlePagination = useCallback((current: number) => {
     setPage(current);
-  };
+  }, []);
+
+  // Early returns AFTER all hooks
+  if (isLoading) return <Loader text={t("common:text-loading")} />;
+  if (error) return <ErrorMessage message={error.message} />;
 
   const handleExportImageList = () => {
     const imageList = [];
@@ -170,6 +209,31 @@ export default function Orders() {
 
   return (
     <>
+      {/* Stats Cards */}
+      <div className="w-full grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mb-6">
+        <StickerCard
+          titleTransKey="Today's Orders"
+          subtitleTransKey="Orders placed today"
+          icon={<PackageCheck className="w-7 h-7" color="#047857" />}
+          iconBgStyle={{ backgroundColor: "#A7F3D0" }}
+          price={`${todayStats.count} orders - $${todayStats.total.toFixed(2)}`}
+        />
+        <StickerCard
+          titleTransKey="Yesterday's Orders"
+          subtitleTransKey="Orders placed yesterday"
+          icon={<DollarSign className="w-7 h-7" color="#DC2626" />}
+          iconBgStyle={{ backgroundColor: "#FEE2E2" }}
+          price={`${yesterdayStats.count} orders - $${yesterdayStats.total.toFixed(2)}`}
+        />
+        <StickerCard
+          titleTransKey="Total Revenue"
+          subtitleTransKey="Combined"
+          icon={<TrendingUp className="w-7 h-7" color="#2563EB" />}
+          iconBgStyle={{ backgroundColor: "#DBEAFE" }}
+          price={`$${(todayStats.total + yesterdayStats.total).toFixed(2)}`}
+        />
+      </div>
+
       <Card className="flex flex-col gap-4 mb-8 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-lg font-semibold text-heading">{t("form:input-label-orders")}</h1>
