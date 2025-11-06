@@ -1,9 +1,10 @@
 -- CreateTable
+-- Note: issue_type và status dùng VARCHAR thay vì ENUM để hỗ trợ các loại issue mới (new, merge_order)
 CREATE TABLE `issues` (
   `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
   `order_id` BIGINT UNSIGNED NOT NULL,
-  `issue_type` ENUM('change_shipping_address', 'change_variation', 'replace') NOT NULL,
-  `status` ENUM('open', 'in_progress', 'resolved', 'closed') NOT NULL DEFAULT 'open',
+  `issue_type` VARCHAR(191) NOT NULL,
+  `status` VARCHAR(191) NOT NULL DEFAULT 'open',
   `old_data` JSON NULL,
   `new_data` JSON NULL,
   `notes` TEXT NULL,

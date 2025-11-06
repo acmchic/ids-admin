@@ -12,11 +12,11 @@ interface CreateIssueModalProps {
 }
 
 const ISSUE_TYPES = [
-  { value: "new", label: "New" },
-  { value: "change_shipping_address", label: "Change Shipping Address" },
-  { value: "change_variation", label: "Change Size/Color/Side" },
-  { value: "replace", label: "Replace" },
-  { value: "merge_order", label: "Merge Orders" },
+  { value: "new", label: "Mới" },
+  { value: "change_shipping_address", label: "Đổi Địa Chỉ Giao Hàng" },
+  { value: "change_variation", label: "Đổi Size / Màu / Vị trí" },
+  { value: "replace", label: "Thay Thế" },
+  { value: "merge_order", label: "Gộp Đơn Hàng" },
 ];
 
 const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
@@ -111,12 +111,12 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       if (data.success) {
         setOrderDetails(data.order);
       } else {
-        toast.error(data.error || "Failed to load order details");
+        toast.error(data.error || "Không thể tải thông tin đơn hàng");
         console.error("API Error:", data);
       }
     } catch (error) {
       console.error("Error loading order details:", error);
-      toast.error("Failed to load order details");
+      toast.error("Không thể tải thông tin đơn hàng");
     } finally {
       setLoadingDetails(false);
     }
@@ -158,11 +158,11 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       if (data.success) {
         setMergeableOrders(data.orders || []);
       } else {
-        toast.error("Failed to load mergeable orders");
+        toast.error("Không thể tải danh sách đơn hàng có thể gộp");
       }
     } catch (error) {
       console.error("Error loading mergeable orders:", error);
-      toast.error("Failed to load mergeable orders");
+      toast.error("Không thể tải danh sách đơn hàng có thể gộp");
     } finally {
       setLoadingMergeableOrders(false);
     }
@@ -185,7 +185,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   // Create issue only (status = open)
   const handleCreate = async () => {
     if (!issueType) {
-      toast.error("Please select an issue type");
+      toast.error("Vui lòng chọn loại vấn đề");
       return;
     }
 
@@ -218,7 +218,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           throw new Error(issueResult.error || "Failed to create issue");
         }
 
-        toast.success("Issue created successfully!");
+        toast.success("Đã tạo vấn đề thành công!");
         if (onIssueCreated) onIssueCreated();
         handleClose();
         setLoading(false);
@@ -250,12 +250,12 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         throw new Error(issueResult.error || "Failed to create issue");
       }
 
-      toast.success("Issue created successfully!");
+      toast.success("Đã tạo vấn đề thành công!");
       if (onIssueCreated) onIssueCreated();
       handleClose();
     } catch (error: any) {
       console.error("Error creating issue:", error);
-      toast.error(error.message || "Failed to create issue");
+      toast.error(error.message || "Không thể tạo vấn đề");
     } finally {
       setLoading(false);
     }
@@ -264,12 +264,12 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   // Resolve issue (update data + change status to resolved)
   const handleResolve = async () => {
     if (!issueType) {
-      toast.error("Please select an issue type");
+      toast.error("Vui lòng chọn loại vấn đề");
       return;
     }
 
     if (issueType === "new") {
-      toast.error('"New" type cannot be resolved, only created');
+      toast.error('Loại "Mới" chỉ có thể tạo, không thể giải quyết');
       return;
     }
 
@@ -283,7 +283,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       if (issueType === "change_shipping_address") {
         // Parse and validate JSON
         if (!jsonData.trim()) {
-          toast.error("Please enter shipping address data");
+          toast.error("Vui lòng nhập dữ liệu địa chỉ giao hàng");
           setLoading(false);
           return;
         }
@@ -292,7 +292,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         try {
           parsedData = JSON.parse(jsonData);
         } catch (e) {
-          toast.error("Invalid JSON format");
+          toast.error("Định dạng JSON không hợp lệ");
           setLoading(false);
           return;
         }
@@ -300,7 +300,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         // Basic validation
         if (!parsedData.shipping_name || !parsedData.shipping_address1 || 
             !parsedData.shipping_city || !parsedData.shipping_zipcode) {
-          toast.error("Missing required fields: shipping_name, shipping_address1, shipping_city, shipping_zipcode");
+          toast.error("Thiếu các trường bắt buộc: tên, địa chỉ, thành phố, mã zip");
           setLoading(false);
           return;
         }
@@ -329,14 +329,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         }
       } else if (issueType === "change_variation") {
         if (!selectedProductId) {
-          toast.error("Please select a product");
+          toast.error("Vui lòng chọn sản phẩm");
           setLoading(false);
           return;
         }
 
         // Parse and validate JSON
         if (!jsonData.trim()) {
-          toast.error("Please enter variation data");
+          toast.error("Vui lòng nhập dữ liệu biến thể");
           setLoading(false);
           return;
         }
@@ -345,7 +345,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         try {
           parsedData = JSON.parse(jsonData);
         } catch (e) {
-          toast.error("Invalid JSON format");
+          toast.error("Định dạng JSON không hợp lệ");
           setLoading(false);
           return;
         }
@@ -356,7 +356,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         );
 
         if (!selectedProduct) {
-          toast.error("Product not found");
+          toast.error("Không tìm thấy sản phẩm");
           setLoading(false);
           return;
         }
@@ -391,7 +391,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         }
       } else if (issueType === "replace") {
         if (!replaceFulfillMethod) {
-          toast.error("Please select a fulfillment method");
+          toast.error("Vui lòng chọn phương thức fulfill");
           setLoading(false);
           return;
         }
@@ -434,13 +434,13 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         }
       } else if (issueType === "merge_order") {
         if (!targetOrderNumber.trim()) {
-          toast.error("Please enter order number to merge");
+          toast.error("Vui lòng chọn đơn hàng để gộp");
           setLoading(false);
           return;
         }
 
         if (!mergeValidation || !mergeValidation.canMerge) {
-          toast.error("Please validate the merge first");
+          toast.error("Vui lòng kiểm tra khả năng gộp đơn trước");
           setLoading(false);
           return;
         }
@@ -527,7 +527,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         }
       }
 
-      toast.success("Issue resolved successfully!");
+      toast.success("Đã Xử lý thành công!");
       
       if (onIssueCreated) {
         onIssueCreated();
@@ -536,7 +536,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       handleClose();
     } catch (error: any) {
       console.error("Error creating issue:", error);
-      toast.error(error.message || "Failed to create issue");
+      toast.error(error.message || "Không thể Xử lý");
     } finally {
       setLoading(false);
     }
@@ -564,7 +564,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       
       <div>
         <label className="block text-sm font-medium mb-2">
-          Current Data (JSON) - Edit directly:
+          Dữ Liệu Hiện Tại (JSON) - Chỉnh sửa trực tiếp:
         </label>
         <textarea
           value={jsonData}
@@ -573,13 +573,13 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           className={`w-full px-3 py-2 border rounded font-mono text-sm ${
             jsonError ? 'border-red-500' : 'border-gray-300'
           }`}
-          placeholder="JSON data will load here..."
+          placeholder="Dữ liệu JSON sẽ hiển thị ở đây..."
         />
         {jsonError && (
-          <p className="text-red-500 text-xs mt-1">❌ Invalid JSON: {jsonError}</p>
+          <p className="text-red-500 text-xs mt-1">❌ JSON không hợp lệ: {jsonError}</p>
         )}
         {!jsonError && jsonData && (
-          <p className="text-green-600 text-xs mt-1">✓ Valid JSON</p>
+          <p className="text-green-600 text-xs mt-1">✓ JSON hợp lệ</p>
         )}
       </div>
     </div>
@@ -587,7 +587,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
   const renderVariationForm = () => {
     if (!orderDetails?.order_product || orderDetails.order_product.length === 0) {
-      return <div className="text-gray-500">No products found for this order</div>;
+      return <div className="text-gray-500">Không tìm thấy sản phẩm cho đơn hàng này</div>;
     }
 
     const products = orderDetails.order_product;
@@ -597,16 +597,16 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       <div className="space-y-3">
         {hasMultipleProducts && (
           <div>
-            <label className="block text-sm font-medium mb-2">Select Product *</label>
+            <label className="block text-sm font-medium mb-2">Chọn Sản Phẩm *</label>
             <select
               value={selectedProductId}
               onChange={(e) => setSelectedProductId(e.target.value)}
               className="w-full px-3 py-2 border rounded"
             >
-              <option value="">-- Select Product --</option>
+              <option value="">-- Chọn Sản Phẩm --</option>
               {products.map((product: any) => (
                 <option key={product.id} value={product.id}>
-                  {product.variation?.name || `Product #${product.id}`}
+                  {product.variation?.name || `Sản phẩm #${product.id}`}
                 </option>
               ))}
             </select>
@@ -616,19 +616,19 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         {!hasMultipleProducts && products.length === 1 && (
           <div className="p-2 bg-gray-50 rounded border">
             <p className="text-sm text-gray-600">
-              <strong>Product:</strong> {products[0].variation?.name || `Product #${products[0].id}`}
+              <strong>Sản phẩm:</strong> {products[0].variation?.name || `Sản phẩm #${products[0].id}`}
             </p>
           </div>
         )}
 
-        {selectedProductId && renderJsonEditor("Product Variation (Name, Size, Color, Side)")}
+        {selectedProductId && renderJsonEditor("Biến Thể Sản Phẩm (Tên, Size, Màu, Mặt)")}
       </div>
     );
   };
 
   const handleValidateMerge = async (orderId: string) => {
     if (!orderId) {
-      toast.error("Please select an order to merge");
+      toast.error("Vui lòng chọn đơn hàng để gộp");
       return;
     }
 
@@ -647,13 +647,13 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       setMergeValidation(result);
 
       if (!result.canMerge) {
-        toast.error(result.reason || "Cannot merge these orders");
+        toast.error(result.reason || "Không thể gộp các đơn hàng này");
       } else {
-        toast.success("Orders can be merged!");
+        toast.success("Có thể gộp đơn hàng!");
       }
     } catch (error) {
       console.error("Error validating merge:", error);
-      toast.error("Failed to validate merge");
+      toast.error("Không thể kiểm tra khả năng gộp đơn");
     } finally {
       setLoading(false);
     }
@@ -669,21 +669,21 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
   const renderMergeForm = () => (
     <div className="space-y-4">
-      <h3 className="font-semibold text-md mb-3">Merge Orders</h3>
+      <h3 className="font-semibold text-md mb-3">Gộp Đơn Hàng</h3>
       
       <div className="p-3 bg-blue-50 border border-blue-200 rounded text-sm">
-        <p className="font-medium text-blue-900 mb-1">Current Order: #{order?.order_num || order?.id}</p>
-        <p className="text-blue-700">Products from target order will be moved to this order</p>
+        <p className="font-medium text-blue-900 mb-1">Đơn Hàng Hiện Tại: #{order?.order_num || order?.id}</p>
+        <p className="text-blue-700">Sản phẩm từ đơn hàng nguồn sẽ được chuyển vào đơn này</p>
       </div>
 
       <div>
         <label className="block text-sm font-medium mb-2">
-          Select Order to Merge * (Status = 1 + Same Address)
+          Chọn Đơn Hàng Để Gộp * (Status = 1 + Cùng Địa Chỉ)
         </label>
         {loadingMergeableOrders ? (
           <div className="flex items-center gap-2 text-gray-600">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span>Loading mergeable orders...</span>
+            <span>Đang tải danh sách đơn hàng...</span>
           </div>
         ) : (
           <>
@@ -693,7 +693,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               className="w-full px-3 py-2 border rounded"
               disabled={loading || mergeableOrders.length === 0}
             >
-              <option value="">-- Select Order --</option>
+              <option value="">-- Chọn Đơn Hàng --</option>
               {mergeableOrders.map((order) => (
                 <option key={order.id} value={order.id}>
                   #{order.order_num} - ${order.total} - {new Date(order.created_at).toLocaleDateString()}
@@ -702,7 +702,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             </select>
             {mergeableOrders.length === 0 && (
               <p className="text-sm text-gray-500 mt-2">
-                No mergeable orders found (must have status = 1 and same shipping address)
+                Không tìm thấy đơn hàng có thể gộp (phải có status = 1 và cùng địa chỉ giao hàng)
               </p>
             )}
           </>
@@ -720,14 +720,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">✅</span>
-                <h4 className="font-bold text-green-900">Orders Can Be Merged</h4>
+                <h4 className="font-bold text-green-900">Có Thể Gộp Đơn Hàng</h4>
               </div>
               <div className="text-sm space-y-1">
                 <p><strong>Email:</strong> {mergeValidation.order1?.email}</p>
-                <p><strong>Order {mergeValidation.order1?.id} Total:</strong> ${mergeValidation.order1?.total}</p>
-                <p><strong>Order {mergeValidation.order2?.id} Total:</strong> ${mergeValidation.order2?.total}</p>
+                <p><strong>Đơn {mergeValidation.order1?.id} Tổng:</strong> ${mergeValidation.order1?.total}</p>
+                <p><strong>Đơn {mergeValidation.order2?.id} Tổng:</strong> ${mergeValidation.order2?.total}</p>
                 <p className="text-green-800 font-bold pt-2">
-                  <strong>New Total After Merge:</strong> ${mergeValidation.newTotal}
+                  <strong>Tổng Mới Sau Khi Gộp:</strong> ${mergeValidation.newTotal}
                 </p>
               </div>
             </div>
@@ -735,14 +735,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <span className="text-2xl">❌</span>
-                <h4 className="font-bold text-red-900">Cannot Merge</h4>
+                <h4 className="font-bold text-red-900">Không Thể Gộp</h4>
               </div>
               <p className="text-sm text-red-800">{mergeValidation.reason}</p>
               {mergeValidation.field && (
                 <div className="text-sm mt-2">
-                  <p><strong>Field:</strong> {mergeValidation.field}</p>
-                  <p><strong>Order 1:</strong> {mergeValidation.value1}</p>
-                  <p><strong>Order 2:</strong> {mergeValidation.value2}</p>
+                  <p><strong>Trường:</strong> {mergeValidation.field}</p>
+                  <p><strong>Đơn 1:</strong> {mergeValidation.value1}</p>
+                  <p><strong>Đơn 2:</strong> {mergeValidation.value2}</p>
                 </div>
               )}
             </div>
@@ -754,7 +754,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
   const renderReplaceForm = () => (
     <div className="space-y-3">
-      <h3 className="font-semibold text-md mb-3">Replace Order - Select Fulfillment Method</h3>
+      <h3 className="font-semibold text-md mb-3">Thay Thế Đơn Hàng - Chọn Phương Thức Fulfill</h3>
       
       <div className="grid grid-cols-2 gap-3">
         <button
@@ -805,7 +805,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       {replaceFulfillMethod && (
         <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded">
           <p className="text-sm text-yellow-800">
-            This will fulfill the order via <strong>{replaceFulfillMethod}</strong> and reset email_sent to 0
+            Đơn hàng sẽ được fulfill qua <strong>{replaceFulfillMethod}</strong> và reset email_sent về 0
           </p>
         </div>
       )}
@@ -818,9 +818,9 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         <div className="px-6 py-4 border-b flex items-center gap-3">
           <ClipboardList className="w-6 h-6 text-blue-600" />
           <div>
-            <h2 className="text-xl font-semibold">Create Issue</h2>
+            <h2 className="text-xl font-semibold">Tạo Vấn Đề</h2>
             <p className="text-sm text-gray-500">
-              Order #{order?.order_num || order?.tracking_number || order?.id}
+              Đơn Hàng #{order?.order_num || order?.tracking_number || order?.id}
             </p>
           </div>
         </div>
@@ -840,29 +840,29 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                       <span className="text-2xl">⚠️</span>
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-yellow-900 mb-2">Open Issue Found</h3>
+                      <h3 className="font-semibold text-yellow-900 mb-2">Tìm Thấy Vấn Đề Đang Mở</h3>
                       <div className="space-y-1 text-sm">
                         <p>
-                          <span className="font-medium">Type:</span>{" "}
+                          <span className="font-medium">Loại:</span>{" "}
                           <span className="text-yellow-800">
                             {ISSUE_TYPES.find(t => t.value === openIssue.issue_type)?.label || openIssue.issue_type}
                           </span>
                         </p>
                         {openIssue.notes && (
                           <p>
-                            <span className="font-medium">Notes:</span>{" "}
+                            <span className="font-medium">Ghi Chú:</span>{" "}
                             <span className="text-yellow-800">{openIssue.notes}</span>
                           </p>
                         )}
                         <p>
-                          <span className="font-medium">Created:</span>{" "}
+                          <span className="font-medium">Tạo Lúc:</span>{" "}
                           <span className="text-yellow-800">
                             {new Date(openIssue.created_at).toLocaleString()}
                           </span>
                         </p>
                       </div>
                       <p className="text-xs text-yellow-700 mt-2">
-                        The form below is pre-filled with this issue's data. You can update and resolve it.
+                        Form bên dưới đã được điền sẵn dữ liệu của vấn đề này. Bạn có thể cập nhật và giải quyết nó.
                       </p>
                     </div>
                   </div>
@@ -870,14 +870,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               )}
 
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Issue Type *</label>
+                <label className="block text-sm font-medium mb-2">Loại Vấn Đề *</label>
                 <select
                   value={issueType}
                   onChange={(e) => setIssueType(e.target.value)}
                   className="w-full px-3 py-2 border rounded"
                   disabled={loading}
                 >
-                  <option value="">-- Select Issue Type --</option>
+                  <option value="">-- Chọn Loại Vấn Đề --</option>
                   {ISSUE_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
                       {type.label}
@@ -886,20 +886,20 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                 </select>
               </div>
 
-              {issueType === "change_shipping_address" && renderJsonEditor("Shipping Address")}
+              {issueType === "change_shipping_address" && renderJsonEditor("Địa Chỉ Giao Hàng")}
               {issueType === "change_variation" && renderVariationForm()}
               {issueType === "replace" && renderReplaceForm()}
               {issueType === "merge_order" && renderMergeForm()}
 
               {issueType && (
                 <div className="mt-4">
-                  <label className="block text-sm font-medium mb-2">Notes (Optional)</label>
+                  <label className="block text-sm font-medium mb-2">Ghi Chú (Tùy Chọn)</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border rounded"
-                    placeholder="Add any additional notes..."
+                    placeholder="Thêm ghi chú nếu cần..."
                   />
                 </div>
               )}
@@ -913,7 +913,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             disabled={loading}
             className="px-4 py-2 border rounded hover:bg-gray-50 disabled:opacity-50"
           >
-            Cancel
+            Hủy
           </button>
           <button
             onClick={handleCreate}
@@ -923,7 +923,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             {loading && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
             )}
-            {loading ? "Processing..." : "Create Issue"}
+            {loading ? "Đang xử lý..." : "Tạo Vấn Đề"}
           </button>
           
           {issueType && issueType !== "new" && (
@@ -940,7 +940,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               {loading && (
                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
               )}
-              {loading ? "Processing..." : issueType === "merge_order" ? "Merge Orders" : "Resolve Issue"}
+              {loading ? "Đang xử lý..." : issueType === "merge_order" ? "Gộp Đơn Hàng" : "Xử lý"}
             </button>
           )}
         </div>

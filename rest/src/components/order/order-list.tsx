@@ -527,16 +527,16 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             
             {/* Row 2: Create Issue Button */}
             <div className="flex justify-center mt-5">
-              <button
-                onClick={() => {
-                  setSelectedOrderForIssue(row);
-                  setIsIssueModalOpen(true);
-                }}
-                className="px-2 py-1 rounded-md border text-white bg-purple-500 hover:bg-purple-600 text-xs inline-flex items-center gap-1"
-                title="Create Issue"
-              >
-                📋 Issue
-              </button>
+            <button
+              onClick={() => {
+                setSelectedOrderForIssue(row);
+                setIsIssueModalOpen(true);
+              }}
+              className="px-2 py-1 rounded-md border text-white bg-purple-500 hover:bg-purple-600 text-xs inline-flex items-center gap-1"
+              title="Ticket"
+            >
+              📋 Ticket
+            </button>
             </div>
           </div>
         );
