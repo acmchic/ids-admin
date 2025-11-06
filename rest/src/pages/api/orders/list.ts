@@ -108,8 +108,8 @@ export default async function handler(
       'tracking_number', 'paid_total', 'total', 'status'
     ];
     
-    // ALWAYS use created_vn_time DESC to show newest orders first
-    const safeOrderBy = 'created_vn_time';
+    // ALWAYS use id DESC to show newest orders first
+    const safeOrderBy = 'id';
     const safeSortedBy = 'DESC';
 
     // Get total count (no alias needed)
