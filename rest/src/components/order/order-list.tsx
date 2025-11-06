@@ -938,9 +938,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               
               displayImgUrl = imgUrl;
               
-              // For linkUrl (click): Convert media/3600/atwork/dark-grey → images
-              // Example: http://localhost:3007/media/3600/atwork/dark-grey/ids/gmc/file.webp
-              //       → http://localhost:3007/images/ids/gmc/file.webp
+              // For linkUrl (click): Use original extension from products.image.original
               linkUrl = imgUrl;
               if (imgUrl && imgUrl.includes('/media/')) {
                 const parts = imgUrl.split('/');
@@ -950,7 +948,35 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 if (mediaIndex !== -1 && parts.length > mediaIndex + 4) {
                   const pathAfterColor = parts.slice(mediaIndex + 4).join('/');
                   const baseUrl = imgUrl.split('/media/')[0];
-                  linkUrl = `${baseUrl}/images/${pathAfterColor}`;
+                  
+                  // Get original extension from products.image.original
+                  let originalExtension = '.webp'; // default
+                  try {
+                    const productImage = (typeof product.image === 'string') 
+                      ? JSON.parse(product.image)
+                      : product.image;
+                    
+                    if (productImage && productImage.original) {
+                      // Extract extension from original: "ids/gmc/file.png" → ".png"
+                      const originalPath = productImage.original;
+                      const lastDot = originalPath.lastIndexOf('.');
+                      if (lastDot !== -1) {
+                        originalExtension = originalPath.substring(lastDot);
+                      }
+                    }
+                  } catch (e) {
+                    console.error('Failed to parse product.image:', e);
+                  }
+                  
+                  // Replace extension in pathAfterColor
+                  // pathAfterColor = "ids/gmc/file.webp" → "ids/gmc/file.png"
+                  const pathParts = pathAfterColor.split('/');
+                  const fileName = pathParts[pathParts.length - 1];
+                  const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
+                  const newFileName = fileNameWithoutExt + originalExtension;
+                  pathParts[pathParts.length - 1] = newFileName;
+                  
+                  linkUrl = `${baseUrl}/images/${pathParts.join('/')}`;
                 }
               }
             }
