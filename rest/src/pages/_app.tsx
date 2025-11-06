@@ -39,7 +39,7 @@ const CustomApp = ({ Component, pageProps }: AppProps) => {
           refetchOnReconnect: true, // Refetch when internet reconnects
           refetchOnMount: true,
           retry: 1,
-          staleTime: 30 * 1000, // Reduced to 30 seconds for more frequent updates
+          staleTime: 2 * 60 * 1000, // Cache for 2 minutes to reduce server load
         },
       },
     });

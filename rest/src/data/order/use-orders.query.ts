@@ -2,6 +2,7 @@ import { QueryParamsType, QueryOptionsType } from "@ts-types/custom.types";
 import { mapPaginatorData } from "@utils/data-mappers";
 import { useQuery } from "react-query";
 import { API_ENDPOINTS } from "@utils/api/endpoints";
+import Order from "@repositories/order";
 
 const fetchOrders = async ({ queryKey }: QueryParamsType) => {
   const [_key, params] = queryKey;
@@ -30,22 +31,15 @@ const fetchOrders = async ({ queryKey }: QueryParamsType) => {
   urlParams.append("orderBy", orderBy);
   urlParams.append("sortedBy", sortedBy);
 
-  // Call internal Next.js API instead of external API
-  const url = `/api/orders/list?${urlParams.toString()}`;
+  // Call external API (orders.idreamshirt.com)
+  const url = `${API_ENDPOINTS.ORDERS}?${urlParams.toString()}`;
 
-  const response = await fetch(url);
-  const responseData = await response.json();
-
-  if (!response.ok) {
-    throw new Error(responseData.error || 'Failed to fetch orders');
-  }
-
-  const { data, ...rest } = responseData;
+  const { data } = await Order.all(url);
 
   return {
     orders: {
-      data,
-      paginatorInfo: mapPaginatorData({ ...rest }),
+      data: data.data,
+      paginatorInfo: mapPaginatorData(data),
     },
   };
 };
@@ -54,12 +48,12 @@ const useOrdersQuery = (params: QueryOptionsType = {}, options: any = {}) => {
   return useQuery<any, Error>([API_ENDPOINTS.ORDERS, params], fetchOrders, {
     ...options,
     keepPreviousData: true,
-    // Override default cache settings for orders - always fetch fresh data
-    staleTime: 0, // Data is immediately stale, will refetch on mount/focus
+    // Optimized cache settings - balance between fresh data and server load
+    staleTime: 60 * 1000, // Cache for 60 seconds - reduces unnecessary requests
     cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes for quick navigation
     refetchOnWindowFocus: true, // Refetch when user returns to tab
-    refetchOnMount: true, // Always refetch on component mount
-    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds when component is mounted
+    refetchOnMount: true, // Refetch on component mount
+    // refetchInterval: REMOVED - don't poll server continuously to reduce load
   });
 };
 
