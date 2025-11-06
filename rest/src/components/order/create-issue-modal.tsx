@@ -218,7 +218,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           throw new Error(issueResult.error || "Failed to create issue");
         }
 
-        toast.success("Đã tạo vấn đề thành công!");
+        toast.success("Đã  Create Ticket thành công!");
         if (onIssueCreated) onIssueCreated();
         handleClose();
         setLoading(false);
@@ -250,12 +250,12 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         throw new Error(issueResult.error || "Failed to create issue");
       }
 
-      toast.success("Đã tạo vấn đề thành công!");
+      toast.success("Đã  Create Ticket thành công!");
       if (onIssueCreated) onIssueCreated();
       handleClose();
     } catch (error: any) {
       console.error("Error creating issue:", error);
-      toast.error(error.message || "Không thể tạo vấn đề");
+      toast.error(error.message || "Không thể  Create Ticket");
     } finally {
       setLoading(false);
     }
@@ -563,9 +563,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       <h3 className="font-semibold text-md mb-3">{title}</h3>
       
       <div>
-        <label className="block text-sm font-medium mb-2">
-          Dữ Liệu Hiện Tại (JSON) - Chỉnh sửa trực tiếp:
-        </label>
+      
         <textarea
           value={jsonData}
           onChange={(e) => handleJsonChange(e.target.value)}
@@ -818,7 +816,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         <div className="px-6 py-4 border-b flex items-center gap-3">
           <ClipboardList className="w-6 h-6 text-blue-600" />
           <div>
-            <h2 className="text-xl font-semibold">Tạo Vấn Đề</h2>
+            <h2 className="text-xl font-semibold"> Create Ticket</h2>
             <p className="text-sm text-gray-500">
               Đơn Hàng #{order?.order_num || order?.tracking_number || order?.id}
             </p>
@@ -861,9 +859,6 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                           </span>
                         </p>
                       </div>
-                      <p className="text-xs text-yellow-700 mt-2">
-                        Form bên dưới đã được điền sẵn dữ liệu của vấn đề này. Bạn có thể cập nhật và giải quyết nó.
-                      </p>
                     </div>
                   </div>
                 </div>
@@ -893,7 +888,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
               {issueType && (
                 <div className="mt-4">
-                  <label className="block text-sm font-medium mb-2">Ghi Chú (Tùy Chọn)</label>
+                  <label className="block text-sm font-medium mb-2">Note</label>
                   <textarea
                     value={notes}
                     onChange={(e) => setNotes(e.target.value)}
@@ -923,7 +918,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             {loading && (
               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
             )}
-            {loading ? "Đang xử lý..." : "Tạo Vấn Đề"}
+            {loading ? "Đang xử lý..." : " Create Ticket"}
           </button>
           
           {issueType && issueType !== "new" && (

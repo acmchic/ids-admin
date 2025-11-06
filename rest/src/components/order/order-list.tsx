@@ -159,6 +159,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   // Issue stats state
   const [issueStats, setIssueStats] = useState<{ openCount: number; orderIds: string[] }>({ openCount: 0, orderIds: [] });
   const [showOpenIssues, setShowOpenIssues] = useState(false);
+  const [allIssues, setAllIssues] = useState<any[]>([]);
   
   // State for fulfill progress
   const [fulfillProgress, setFulfillProgress] = useState<{
@@ -188,10 +189,25 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     }
   }, []);
 
-  // Load issue stats
+  const loadAllIssues = useCallback(async () => {
+    try {
+      // Load all open issues with type "new"
+      const response = await fetch('/api/issues/get-all-open');
+      const result = await response.json();
+      if (result.success) {
+        console.log('✅ Loaded open issues:', result.issues);
+        setAllIssues(result.issues || []);
+      }
+    } catch (error) {
+      console.error('Failed to load all issues:', error);
+    }
+  }, []);
+
+  // Load issue stats and all issues
   useEffect(() => {
     loadIssueStats();
-  }, [loadIssueStats]);
+    loadAllIssues();
+  }, [loadIssueStats, loadAllIssues]);
 
   const handleToggleOpenIssues = () => {
     setShowOpenIssues(!showOpenIssues);
@@ -525,18 +541,54 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               )}
             </div>
             
-            {/* Row 2: Create Issue Button */}
-            <div className="flex justify-center mt-5">
-            <button
-              onClick={() => {
-                setSelectedOrderForIssue(row);
-                setIsIssueModalOpen(true);
-              }}
-              className="px-2 py-1 rounded-md border text-white bg-purple-500 hover:bg-purple-600 text-xs inline-flex items-center gap-1"
-              title="Ticket"
-            >
-              📋 Ticket
-            </button>
+            {/* Row 2: Ticket Button + Open Issue Notes */}
+            <div className="flex flex-col items-center mt-5">
+              <button
+                onClick={() => {
+                  setSelectedOrderForIssue(row);
+                  setIsIssueModalOpen(true);
+                }}
+                className="px-2 py-1 rounded-md border text-white bg-purple-500 hover:bg-purple-600 text-xs inline-flex items-center gap-1"
+                title="Ticket"
+              >
+                📋 Ticket
+              </button>
+              
+              {(() => {
+                // Find any open issue for this order that has notes
+                const openIssue = allIssues.find((issue: any) => {
+                  const match = String(issue.order_id) === String(row.id) && 
+                    issue.status === 'open' &&
+                    issue.notes;
+                  
+                  if (String(issue.order_id) === String(row.id)) {
+                    console.log(`🔍 Checking order ${row.id}:`, {
+                      issue_order_id: issue.order_id,
+                      row_id: row.id,
+                      status: issue.status,
+                      notes: issue.notes,
+                      match
+                    });
+                  }
+                  
+                  return match;
+                });
+                
+                if (openIssue) {
+                  const noteText = openIssue.notes;
+                  const displayText = noteText.length > 30 ? `${noteText.substring(0, 30)}...` : noteText;
+                  
+                  return (
+                    <div 
+                      className="mt-1  text-red-600  max-w-full px-2 pt-4 text-center" 
+                      title={noteText}
+                    >
+                      {displayText}
+                    </div>
+                  );
+                }
+                return null;
+              })()}
             </div>
           </div>
         );
@@ -1564,8 +1616,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           }}
           order={selectedOrderForIssue}
           onIssueCreated={() => {
-            // Reload issue stats after creating/resolving issue
+            // Reload issue stats and all issues after creating/resolving
             loadIssueStats();
+            loadAllIssues();
           }}
         />
       )}
