@@ -54,6 +54,12 @@ const useOrdersQuery = (params: QueryOptionsType = {}, options: any = {}) => {
   return useQuery<any, Error>([API_ENDPOINTS.ORDERS, params], fetchOrders, {
     ...options,
     keepPreviousData: true,
+    // Override default cache settings for orders - always fetch fresh data
+    staleTime: 0, // Data is immediately stale, will refetch on mount/focus
+    cacheTime: 5 * 60 * 1000, // Keep in cache for 5 minutes for quick navigation
+    refetchOnWindowFocus: true, // Refetch when user returns to tab
+    refetchOnMount: true, // Always refetch on component mount
+    refetchInterval: 30 * 1000, // Auto-refresh every 30 seconds when component is mounted
   });
 };
 

@@ -35,11 +35,11 @@ const CustomApp = ({ Component, pageProps }: AppProps) => {
     queryClientRef.current = new QueryClient({
       defaultOptions: {
         queries: {
-          refetchOnWindowFocus: false,
-          refetchOnReconnect: false,
+          refetchOnWindowFocus: true, // Enable refetch on window focus for fresh data
+          refetchOnReconnect: true, // Refetch when internet reconnects
           refetchOnMount: true,
           retry: 1,
-          staleTime: 5 * 60 * 1000, // 5 minutes
+          staleTime: 30 * 1000, // Reduced to 30 seconds for more frequent updates
         },
       },
     });
