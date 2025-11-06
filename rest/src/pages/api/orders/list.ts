@@ -107,8 +107,10 @@ export default async function handler(
       'id', 'created_at', 'updated_at', 'created_vn_time', 
       'tracking_number', 'paid_total', 'total', 'status'
     ];
-    const safeOrderBy = allowedOrderFields.includes(orderBy as string) ? orderBy : 'created_vn_time';
-    const safeSortedBy = (sortedBy as string).toUpperCase() === 'ASC' ? 'ASC' : 'DESC';
+    
+    // ALWAYS use created_vn_time DESC to show newest orders first
+    const safeOrderBy = 'created_vn_time';
+    const safeSortedBy = 'DESC';
 
     // Get total count (no alias needed)
     const t1 = Date.now();
