@@ -33,6 +33,8 @@ import {
   UserAddress1,
 } from "@ts-types/generated";
 
+const ISSUE_API_BASE = process.env.NEXT_PUBLIC_REST_API_ENDPOINT
+
 const logFulfilledOrders = async (orders: any[], statusCode: number) => {
   try {
     const now = new Date();
@@ -176,9 +178,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
   const loadIssueStats = useCallback(async () => {
     try {
-      const response = await fetch('/api/issues/stats');
+      if (!ISSUE_API_BASE) return;
+      const response = await fetch(`${ISSUE_API_BASE}/issues/stats`);
       const result = await response.json();
-      if (result.success) {
+      if (response.ok && result.success) {
         setIssueStats({
           openCount: result.openCount,
           orderIds: result.orderIds,
@@ -192,10 +195,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   const loadAllIssues = useCallback(async () => {
     try {
       // Load all open issues with type "new"
-      const response = await fetch('/api/issues/get-all-open');
+      if (!ISSUE_API_BASE) return;
+      const response = await fetch(`${ISSUE_API_BASE}/issues/open`);
       const result = await response.json();
-      if (result.success) {
-        console.log('✅ Loaded open issues:', result.issues);
+      if (response.ok && result.success) {
         setAllIssues(result.issues || []);
       }
     } catch (error) {

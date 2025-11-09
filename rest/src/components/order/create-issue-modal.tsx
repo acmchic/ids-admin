@@ -4,6 +4,8 @@ import { toast } from "react-toastify";
 import axios from "axios";
 import { ClipboardList } from "lucide-react";
 
+const ISSUE_API_BASE = process.env.NEXT_PUBLIC_REST_API_ENDPOINT
+
 interface CreateIssueModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -12,11 +14,11 @@ interface CreateIssueModalProps {
 }
 
 const ISSUE_TYPES = [
-  { value: "new", label: "Mới" },
-  { value: "change_shipping_address", label: "Đổi Địa Chỉ Giao Hàng" },
-  { value: "change_variation", label: "Đổi Size / Màu / Vị trí" },
-  { value: "replace", label: "Thay Thế" },
-  { value: "merge_order", label: "Gộp Đơn Hàng" },
+  { value: "new", label: "New" },
+  { value: "change_shipping_address", label: "Đổi Shipping address" },
+  { value: "change_variation", label: "Change Size / Màu / Vị trí" },
+  { value: "replace", label: "Replace" },
+  { value: "merge_order", label: "Gộp Đơn" },
 ];
 
 const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
@@ -105,8 +107,9 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const loadOrderDetails = async () => {
     setLoadingDetails(true);
     try {
-      const response = await fetch(`/api/orders/get-order-details-simple?order_id=${order.id}`);
+      const response = await fetch(`${ISSUE_API_BASE}/api/orders/get-order-details-simple?order_id=${order.id}`);
       const data = await response.json();
+      console.log("data ==> ", data);
       
       if (data.success) {
         setOrderDetails(data.order);
@@ -124,10 +127,11 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
   const loadExistingIssues = async () => {
     try {
-      const response = await fetch(`/api/issues/get-by-order?order_id=${order.id}`);
+      if (!order?.id || !ISSUE_API_BASE) return;
+      const response = await fetch(`${ISSUE_API_BASE}/issues/order/${order.id}`);
       const data = await response.json();
-      
-      if (data.success) {
+
+      if (response.ok && data.success) {
         setExistingIssues(data.issues || []);
         
         // Find open issue
@@ -143,6 +147,8 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             setJsonData(JSON.stringify(open.old_data, null, 2));
           }
         }
+      } else if (!response.ok) {
+        throw new Error(data?.error || `HTTP ${response.status}`);
       }
     } catch (error) {
       console.error("Error loading existing issues:", error);
@@ -152,7 +158,10 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   const loadMergeableOrders = async () => {
     setLoadingMergeableOrders(true);
     try {
-      const response = await fetch(`/api/orders/get-mergeable-orders?order_id=${order.id}`);
+      if (!ISSUE_API_BASE) {
+        throw new Error("Issue API chưa được cấu hình");
+      }
+      const response = await fetch(`${ISSUE_API_BASE}/api/orders/get-mergeable-orders?order_id=${order.id}`);
       const data = await response.json();
       
       if (data.success) {
@@ -185,7 +194,12 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   // Create issue only (status = open)
   const handleCreate = async () => {
     if (!issueType) {
-      toast.error("Vui lòng chọn loại vấn đề");
+      toast.error("Vui lòng chọn Issue");
+      return;
+    }
+
+    if (!ISSUE_API_BASE) {
+      toast.error("Issue API chưa được cấu hình");
       return;
     }
 
@@ -194,7 +208,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     try {
       // For "New" type, just create issue without any updates
       if (issueType === "new") {
-        const issueResponse = await fetch("/api/issues/create", {
+        const issueResponse = await fetch(`${ISSUE_API_BASE}/issues`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -208,14 +222,15 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           }),
         });
 
-        if (!issueResponse.ok) {
-          const errorData = await issueResponse.json().catch(() => ({ error: "HTTP error" }));
-          throw new Error(errorData.error || `HTTP ${issueResponse.status}: Failed to create issue`);
-        }
+        const issueResult = await issueResponse.json().catch(() => null);
 
-        const issueResult = await issueResponse.json();
-        if (!issueResult.success) {
-          throw new Error(issueResult.error || "Failed to create issue");
+        if (!issueResponse.ok || !issueResult?.success) {
+          const message =
+            issueResult?.error ||
+            issueResult?.message ||
+            (issueResult?.errors ? JSON.stringify(issueResult.errors) : undefined) ||
+            `HTTP ${issueResponse.status}: Failed to create issue`;
+          throw new Error(message);
         }
 
         toast.success("Đã  Create Ticket thành công!");
@@ -226,7 +241,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       }
 
       // For other types, create issue but don't resolve yet
-      const issueResponse = await fetch("/api/issues/create", {
+      const issueResponse = await fetch(`${ISSUE_API_BASE}/issues`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -240,14 +255,15 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         }),
       });
 
-      if (!issueResponse.ok) {
-        const errorData = await issueResponse.json().catch(() => ({ error: "HTTP error" }));
-        throw new Error(errorData.error || `HTTP ${issueResponse.status}: Failed to create issue`);
-      }
+      const issueResult = await issueResponse.json().catch(() => null);
 
-      const issueResult = await issueResponse.json();
-      if (!issueResult.success) {
-        throw new Error(issueResult.error || "Failed to create issue");
+      if (!issueResponse.ok || !issueResult?.success) {
+        const message =
+          issueResult?.error ||
+          issueResult?.message ||
+          (issueResult?.errors ? JSON.stringify(issueResult.errors) : undefined) ||
+          `HTTP ${issueResponse.status}: Failed to create issue`;
+        throw new Error(message);
       }
 
       toast.success("Đã  Create Ticket thành công!");
@@ -261,10 +277,62 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     }
   };
 
+  const handleResolveNew = async () => {
+    if (!ISSUE_API_BASE) {
+      toast.error("Issue API chưa được cấu hình");
+      return;
+    }
+
+    if (!openIssue || openIssue.issue_type !== "new") {
+      toast.error("Không có ticket 'New' nào cần xử lý");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await fetch(`${ISSUE_API_BASE}/issues/${openIssue.id}/status`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          status: "resolved",
+          notes,
+        }),
+      });
+
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok || !result?.success) {
+        const message =
+          result?.error ||
+          result?.message ||
+          (result?.errors ? JSON.stringify(result.errors) : undefined) ||
+          `HTTP ${response.status}: Failed to update issue`;
+        throw new Error(message);
+      }
+
+      toast.success("Đã Xử lý thành công!");
+      if (onIssueCreated) {
+        onIssueCreated();
+      }
+      handleClose();
+    } catch (error: any) {
+      console.error("Error resolving new issue:", error);
+      toast.error(error.message || "Không thể Xử lý");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Resolve issue (update data + change status to resolved)
   const handleResolve = async () => {
     if (!issueType) {
-      toast.error("Vui lòng chọn loại vấn đề");
+      toast.error("Vui lòng chọn Issue");
+      return;
+    }
+
+    if (!ISSUE_API_BASE) {
+      toast.error("Issue API chưa được cấu hình");
       return;
     }
 
@@ -309,7 +377,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         newData = parsedData;
 
         // Update shipping address
-        const updateResponse = await fetch("/api/orders/update-shipping-address", {
+        const updateResponse = await fetch(`${ISSUE_API_BASE}/api/orders/update-shipping-address`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -371,7 +439,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           ...parsedData, // Override with new values
         };
 
-        const updateResponse = await fetch("/api/orders/update-variation", {
+        const updateResponse = await fetch(`${ISSUE_API_BASE}/api/orders/update-variation`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -413,7 +481,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           });
 
           // Update email_send to 0
-          const emailResponse = await fetch("/api/orders/update-email-sent", {
+          const emailResponse = await fetch(`${ISSUE_API_BASE}/api/orders/update-email-sent`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -446,7 +514,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         }
 
         // Merge orders
-        const mergeResponse = await fetch("/api/orders/merge", {
+        const mergeResponse = await fetch(`${ISSUE_API_BASE}/api/orders/merge`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -480,29 +548,28 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       // If there's an existing open issue, update it; otherwise create new one
       if (openIssue) {
         // Update existing issue to resolved
-        const updateResponse = await fetch("/api/issues/update-status", {
+        const updateResponse = await fetch(`${ISSUE_API_BASE}/issues/${openIssue.id}/status`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            issue_id: openIssue.id,
             status: "resolved",
             new_data: newData,
             notes: notes,
           }),
         });
 
-        if (!updateResponse.ok) {
-          const errorData = await updateResponse.json().catch(() => ({ error: "HTTP error" }));
-          throw new Error(errorData.error || `HTTP ${updateResponse.status}: Failed to update issue`);
-        }
-
-        const updateResult = await updateResponse.json();
-        if (!updateResult.success) {
-          throw new Error(updateResult.error || "Failed to update issue");
+        const updateResult = await updateResponse.json().catch(() => null);
+        if (!updateResponse.ok || !updateResult?.success) {
+          const message =
+            updateResult?.error ||
+            updateResult?.message ||
+            (updateResult?.errors ? JSON.stringify(updateResult.errors) : undefined) ||
+            `HTTP ${updateResponse.status}: Failed to update issue`;
+          throw new Error(message);
         }
       } else {
         // Create new issue record with status = resolved
-        const issueResponse = await fetch("/api/issues/create", {
+        const issueResponse = await fetch(`${ISSUE_API_BASE}/issues`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -516,14 +583,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           }),
         });
 
-        if (!issueResponse.ok) {
-          const errorData = await issueResponse.json().catch(() => ({ error: "HTTP error" }));
-          throw new Error(errorData.error || `HTTP ${issueResponse.status}: Failed to create issue`);
-        }
-
-        const issueResult = await issueResponse.json();
-        if (!issueResult.success) {
-          throw new Error(issueResult.error || "Failed to create issue");
+        const issueResult = await issueResponse.json().catch(() => null);
+        if (!issueResponse.ok || !issueResult?.success) {
+          const message =
+            issueResult?.error ||
+            issueResult?.message ||
+            (issueResult?.errors ? JSON.stringify(issueResult.errors) : undefined) ||
+            `HTTP ${issueResponse.status}: Failed to create issue`;
+          throw new Error(message);
         }
       }
 
@@ -632,7 +699,10 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
     setLoading(true);
     try {
-      const response = await fetch("/api/orders/validate-merge", {
+      if (!ISSUE_API_BASE) {
+        throw new Error("Issue API chưa được cấu hình");
+      }
+      const response = await fetch(`${ISSUE_API_BASE}/api/orders/validate-merge`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -838,7 +908,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                       <span className="text-2xl">⚠️</span>
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-yellow-900 mb-2">Tìm Thấy Vấn Đề Đang Mở</h3>
+                      <h3 className="font-semibold text-yellow-900 mb-2">Issues</h3>
                       <div className="space-y-1 text-sm">
                         <p>
                           <span className="font-medium">Loại:</span>{" "}
@@ -848,16 +918,11 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                         </p>
                         {openIssue.notes && (
                           <p>
-                            <span className="font-medium">Ghi Chú:</span>{" "}
+                            <span className="font-medium">Notes:</span>{" "}
                             <span className="text-yellow-800">{openIssue.notes}</span>
                           </p>
                         )}
-                        <p>
-                          <span className="font-medium">Tạo Lúc:</span>{" "}
-                          <span className="text-yellow-800">
-                            {new Date(openIssue.created_at).toLocaleString()}
-                          </span>
-                        </p>
+                        
                       </div>
                     </div>
                   </div>
@@ -865,14 +930,14 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               )}
 
               <div className="mb-4">
-                <label className="block text-sm font-medium mb-2">Loại Vấn Đề *</label>
+                <label className="block text-sm font-medium mb-2">Issue *</label>
                 <select
                   value={issueType}
                   onChange={(e) => setIssueType(e.target.value)}
                   className="w-full px-3 py-2 border rounded"
                   disabled={loading}
                 >
-                  <option value="">-- Chọn Loại Vấn Đề --</option>
+                  <option value="">-- Chọn Issue --</option>
                   {ISSUE_TYPES.map((type) => (
                     <option key={type.value} value={type.value}>
                       {type.label}
@@ -920,6 +985,19 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             )}
             {loading ? "Đang xử lý..." : " Create Ticket"}
           </button>
+
+          {issueType === "new" && openIssue && (
+            <button
+              onClick={handleResolveNew}
+              disabled={loading || loadingDetails}
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              {loading && (
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+              )}
+              {loading ? "Đang xử lý..." : "Đã xử lý"}
+            </button>
+          )}
           
           {issueType && issueType !== "new" && (
             <button
