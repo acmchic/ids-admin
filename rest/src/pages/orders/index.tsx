@@ -2,7 +2,7 @@ import Card from "@components/common/card";
 import Layout from "@components/layouts/admin";
 import Search from "@components/common/search";
 import OrderList from "@components/order/order-list";
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import ErrorMessage from "@components/ui/error-message";
 import Loader from "@components/ui/loader/loader";
 import { useOrdersQuery } from "@data/order/use-orders.query";
@@ -13,11 +13,8 @@ import { adminOnly } from "@utils/auth-utils";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
-import { DollarSign, PackageCheck, ClipboardCopy, TrendingUp } from "lucide-react";
+import { ClipboardCopy } from "lucide-react";
 import { toast } from "react-toastify";
-import StickerCard from "@components/widgets/sticker-card";
-
-const ORDERS_API_BASE = (process.env.NEXT_PUBLIC_REST_API_ENDPOINT || "/api").replace(/\/+$/, "");
 
 export default function Orders() {
   const { t } = useTranslation();
@@ -33,10 +30,6 @@ export default function Orders() {
   const [isTodayFilter, setIsTodayFilter] = useState(false);
   const [isYesterdayFilter, setIsYesterdayFilter] = useState(false);
 
-  // Stats for cards
-  const [todayStats, setTodayStats] = useState({ count: 0, total: 0 });
-  const [yesterdayStats, setYesterdayStats] = useState({ count: 0, total: 0 });
-
   const { data, isLoading, error, isFetching } = useOrdersQuery({
     limit,
     page,
@@ -48,8 +41,6 @@ export default function Orders() {
   const IN_PRODUCTION_STATUS_IDS = useMemo(() => [2, 8, 9, 11, 12, 68, 77, 78], []);
 
   const todayOrders = data?.orders?.data || [];
-  const totalTodayCount = todayOrders.length;
-  const totalTodayAmount = todayOrders.reduce((sum, order) => sum + (Number(order.paid_total) || 0), 0);
   const statusOneCount = useMemo(
     () => todayOrders.filter((order) => Number(order.status?.id) === 1).length,
     [todayOrders]
@@ -65,59 +56,6 @@ export default function Orders() {
   );
 
   // Load stats for today and yesterday - OPTIMIZED
-  useEffect(() => {
-    const fetchDailyStats = async (date: string) => {
-      const restUrl = `${ORDERS_API_BASE}/orders/stats/daily?date=${date}`;
-      try {
-        const restResponse = await fetch(restUrl);
-        if (restResponse.ok) {
-          const restData = await restResponse.json();
-          if (restData?.success) {
-            return restData;
-          }
-        } else {
-          throw new Error(`REST stats failed with ${restResponse.status}`);
-        }
-      } catch (error) {
-        try {
-          const fallbackResponse = await fetch(`/api/orders/stats?date=${date}`);
-          if (!fallbackResponse.ok) {
-            throw new Error(`Fallback stats failed with ${fallbackResponse.status}`);
-          }
-          return await fallbackResponse.json();
-        } catch (fallbackError) {
-          console.error("❌ Failed to fetch stats (fallback):", fallbackError);
-          return null;
-        }
-      }
-
-      return null;
-    };
-
-    const loadStats = async () => {
-      const today = format(new Date(), "yyyy-MM-dd");
-      const yesterday = format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
-
-      try {
-        const [todayData, yesterdayData] = await Promise.all([
-          fetchDailyStats(today),
-          fetchDailyStats(yesterday),
-        ]);
-
-        if (todayData?.success) {
-          setTodayStats({ count: todayData.count, total: todayData.total });
-        }
-
-        if (yesterdayData?.success) {
-          setYesterdayStats({ count: yesterdayData.count, total: yesterdayData.total });
-        }
-      } catch (error) {
-        console.error("❌ Failed to load stats:", error);
-      }
-    };
-
-    loadStats();
-  }, []);
 
   // Define callbacks BEFORE early returns (hooks must be called in same order every render)
   const handleSearch = useCallback(({ searchText }: { searchText: string }) => {
@@ -267,31 +205,6 @@ export default function Orders() {
 
   return (
     <>
-      {/* Stats Cards */}
-      <div className="w-full grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5 mb-6">
-        <StickerCard
-          titleTransKey="Today's Orders"
-          subtitleTransKey="Orders placed today"
-          icon={<PackageCheck className="w-7 h-7" color="#047857" />}
-          iconBgStyle={{ backgroundColor: "#A7F3D0" }}
-          price={`${todayStats.count} orders - $${todayStats.total.toFixed(2)}`}
-        />
-        <StickerCard
-          titleTransKey="Yesterday's Orders"
-          subtitleTransKey="Orders placed yesterday"
-          icon={<DollarSign className="w-7 h-7" color="#DC2626" />}
-          iconBgStyle={{ backgroundColor: "#FEE2E2" }}
-          price={`${yesterdayStats.count} orders - $${yesterdayStats.total.toFixed(2)}`}
-        />
-        <StickerCard
-          titleTransKey="Total Revenue"
-          subtitleTransKey="Combined"
-          icon={<TrendingUp className="w-7 h-7" color="#2563EB" />}
-          iconBgStyle={{ backgroundColor: "#DBEAFE" }}
-          price={`$${(todayStats.total + yesterdayStats.total).toFixed(2)}`}
-        />
-      </div>
-
       <Card className="flex flex-col gap-4 mb-8 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-lg font-semibold text-heading">{t("form:input-label-orders")}</h1>
@@ -329,16 +242,6 @@ export default function Orders() {
         Generate List IMG
       </button>
 
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <PackageCheck className="w-4 h-4 text-blue-600" />
-        <span className="font-medium">{totalTodayCount} orders</span>
-      </div>
-      <div className="flex items-center gap-2 text-sm text-gray-700">
-        <DollarSign className="w-4 h-4 text-green-600" />
-        <span className="font-medium">
-          ${totalTodayAmount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-        </span>
-      </div>
     </>
   )}
 </div>

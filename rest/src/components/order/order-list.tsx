@@ -25,6 +25,7 @@ import { AlertTriangle, Search } from "lucide-react";
 import { getApiUrl } from "../../config/api";
 import CreateIssueModal from "./create-issue-modal";
 import { validateZipcode } from "../../utils/zipcode-validator";
+import { determineAutoFulfillSelections } from "../../utils/orders/auto-fulfill-selection";
 
 import {
   OrderPaginator,
@@ -267,6 +268,36 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     setSelectedOrders(newSelections);
     
     console.log(`✅ All M: Selected ${ordersWithStatus.length} orders with status = 1 or 78`);
+  };
+
+  const handleSelectAuto = () => {
+    const eligibleOrders = data?.filter(order => order.status?.id === 1 || order.status?.id === 78) || [];
+    if (eligibleOrders.length === 0) {
+      toast.info("Không có đơn nào ở trạng thái 1 hoặc 78 để chọn.");
+      return;
+    }
+
+    const suggestions = determineAutoFulfillSelections(eligibleOrders, {
+      burgerStatusId: 9,
+      mangoStatusId: 69,
+    });
+
+    const normalized: Record<string, number> = {};
+    let burgerCount = 0;
+    let mangoCount = 0;
+
+    eligibleOrders.forEach(order => {
+      const statusId = suggestions[order.id] ?? 69;
+      normalized[order.id] = statusId;
+      if (statusId === 9) burgerCount += 1;
+      if (statusId === 69) mangoCount += 1;
+    });
+
+    setSelectedOrders(normalized);
+
+    toast.success(
+      `Đã chọn ${eligibleOrders.length} đơn: Burger ${burgerCount}, Mango ${mangoCount}`
+    );
   };
 
   const onHeaderClick = (column: string | null) => ({
@@ -1543,6 +1574,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
           >
             All M 
+          </button>
+          <button
+            onClick={handleSelectAuto}
+            className="px-4 py-2 bg-indigo-500 text-white rounded hover:bg-indigo-600 font-semibold shadow"
+          >
+            All
           </button>
           <button
             onClick={() => setSelectedOrders({})}
