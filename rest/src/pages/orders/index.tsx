@@ -2,7 +2,7 @@ import Card from "@components/common/card";
 import Layout from "@components/layouts/admin";
 import Search from "@components/common/search";
 import OrderList from "@components/order/order-list";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import ErrorMessage from "@components/ui/error-message";
 import Loader from "@components/ui/loader/loader";
 import { useOrdersQuery } from "@data/order/use-orders.query";
@@ -16,6 +16,8 @@ import { format } from "date-fns";
 import { DollarSign, PackageCheck, ClipboardCopy, TrendingUp } from "lucide-react";
 import { toast } from "react-toastify";
 import StickerCard from "@components/widgets/sticker-card";
+
+const ORDERS_API_BASE = (process.env.NEXT_PUBLIC_REST_API_ENDPOINT || "/api").replace(/\/+$/, "");
 
 export default function Orders() {
   const { t } = useTranslation();
@@ -35,7 +37,7 @@ export default function Orders() {
   const [todayStats, setTodayStats] = useState({ count: 0, total: 0 });
   const [yesterdayStats, setYesterdayStats] = useState({ count: 0, total: 0 });
 
-  const { data, isLoading, error } = useOrdersQuery({
+  const { data, isLoading, error, isFetching } = useOrdersQuery({
     limit,
     page,
     orderBy,
@@ -43,37 +45,74 @@ export default function Orders() {
     ...(filters as any),
   });
 
+  const IN_PRODUCTION_STATUS_IDS = useMemo(() => [2, 8, 9, 11, 12, 68, 77, 78], []);
+
   const todayOrders = data?.orders?.data || [];
   const totalTodayCount = todayOrders.length;
   const totalTodayAmount = todayOrders.reduce((sum, order) => sum + (Number(order.paid_total) || 0), 0);
+  const statusOneCount = useMemo(
+    () => todayOrders.filter((order) => Number(order.status?.id) === 1).length,
+    [todayOrders]
+  );
+  const statusSeventyEightCount = useMemo(
+    () => todayOrders.filter((order) => Number(order.status?.id) === 78).length,
+    [todayOrders]
+  );
+  const inProductionCount = useMemo(
+    () =>
+      todayOrders.filter((order) => IN_PRODUCTION_STATUS_IDS.includes(Number(order.status?.id))).length,
+    [todayOrders, IN_PRODUCTION_STATUS_IDS]
+  );
 
   // Load stats for today and yesterday - OPTIMIZED
   useEffect(() => {
+    const fetchDailyStats = async (date: string) => {
+      const restUrl = `${ORDERS_API_BASE}/orders/stats/daily?date=${date}`;
+      try {
+        const restResponse = await fetch(restUrl);
+        if (restResponse.ok) {
+          const restData = await restResponse.json();
+          if (restData?.success) {
+            return restData;
+          }
+        } else {
+          throw new Error(`REST stats failed with ${restResponse.status}`);
+        }
+      } catch (error) {
+        try {
+          const fallbackResponse = await fetch(`/api/orders/stats?date=${date}`);
+          if (!fallbackResponse.ok) {
+            throw new Error(`Fallback stats failed with ${fallbackResponse.status}`);
+          }
+          return await fallbackResponse.json();
+        } catch (fallbackError) {
+          console.error("❌ Failed to fetch stats (fallback):", fallbackError);
+          return null;
+        }
+      }
+
+      return null;
+    };
+
     const loadStats = async () => {
       const today = format(new Date(), "yyyy-MM-dd");
       const yesterday = format(new Date(Date.now() - 86400000), "yyyy-MM-dd");
 
       try {
-        // Fetch both stats in parallel using lightweight API
-        const [todayRes, yesterdayRes] = await Promise.all([
-          fetch(`/api/orders/stats?date=${today}`),
-          fetch(`/api/orders/stats?date=${yesterday}`)
-        ]);
-
         const [todayData, yesterdayData] = await Promise.all([
-          todayRes.json(),
-          yesterdayRes.json()
+          fetchDailyStats(today),
+          fetchDailyStats(yesterday),
         ]);
 
-        if (todayData.success) {
+        if (todayData?.success) {
           setTodayStats({ count: todayData.count, total: todayData.total });
         }
 
-        if (yesterdayData.success) {
+        if (yesterdayData?.success) {
           setYesterdayStats({ count: yesterdayData.count, total: yesterdayData.total });
         }
       } catch (error) {
-        console.error('❌ Failed to load stats:', error);
+        console.error("❌ Failed to load stats:", error);
       }
     };
 
@@ -90,9 +129,86 @@ export default function Orders() {
     setPage(current);
   }, []);
 
+  const applyStatusFilters = useCallback(
+    (
+      statusOne: boolean,
+      statusSeventyEight: boolean,
+      production: boolean,
+      dateOverride?: string | null
+    ) => {
+      let dateValue: string | undefined;
+
+      if (dateOverride !== undefined) {
+        dateValue = dateOverride ?? undefined;
+      } else if (isTodayFilter) {
+        dateValue = format(new Date(), "yyyy-MM-dd");
+      } else if (isYesterdayFilter) {
+        const yesterdayDate = new Date();
+        yesterdayDate.setDate(yesterdayDate.getDate() - 1);
+        dateValue = format(yesterdayDate, "yyyy-MM-dd");
+      } else if (selectedDate) {
+        dateValue = format(selectedDate, "yyyy-MM-dd");
+      }
+
+      setPage(1);
+      setFilters((prev) => {
+        const next = {
+          ...prev,
+          date: dateValue,
+          status: undefined as number | undefined,
+          status_in: undefined as string | undefined,
+        };
+
+        if (production) {
+          next.status_in = IN_PRODUCTION_STATUS_IDS.join(",");
+        } else if (statusOne) {
+          next.status = 1;
+        } else if (statusSeventyEight) {
+          next.status = 78;
+        }
+
+        return next;
+      });
+    },
+    [IN_PRODUCTION_STATUS_IDS, isTodayFilter, isYesterdayFilter, selectedDate]
+  );
+
   // Early returns AFTER all hooks
-  if (isLoading) return <Loader text={t("common:text-loading")} />;
+  if (isLoading && !data) return <Loader text={t("common:text-loading")} />;
   if (error) return <ErrorMessage message={error.message} />;
+
+  const handleToggleStatusOne = () => {
+    const nextStatusOne = !onlyStatusOne;
+    const nextStatus78 = nextStatusOne ? false : onlyStatus78;
+    const nextProduction = nextStatusOne ? false : inProductionProcessing;
+
+    setOnlyStatusOne(nextStatusOne);
+    setOnlyStatus78(nextStatus78);
+    setInProductionProcessing(nextProduction);
+    applyStatusFilters(nextStatusOne, nextStatus78, nextProduction);
+  };
+
+  const handleToggleStatusSeventyEight = () => {
+    const nextStatus78 = !onlyStatus78;
+    const nextStatusOne = nextStatus78 ? false : onlyStatusOne;
+    const nextProduction = nextStatus78 ? false : inProductionProcessing;
+
+    setOnlyStatus78(nextStatus78);
+    setOnlyStatusOne(nextStatusOne);
+    setInProductionProcessing(nextProduction);
+    applyStatusFilters(nextStatusOne, nextStatus78, nextProduction);
+  };
+
+  const handleToggleInProduction = () => {
+    const nextProduction = !inProductionProcessing;
+    const nextStatusOne = nextProduction ? false : onlyStatusOne;
+    const nextStatus78 = nextProduction ? false : onlyStatus78;
+
+    setInProductionProcessing(nextProduction);
+    setOnlyStatusOne(nextStatusOne);
+    setOnlyStatus78(nextStatus78);
+    applyStatusFilters(nextStatusOne, nextStatus78, nextProduction);
+  };
 
   const handleExportImageList = () => {
     const imageList = [];
@@ -118,84 +234,26 @@ export default function Orders() {
     link.click();
   };
 
-
-
   const handleTodayFilter = () => {
     const today = new Date();
     setSelectedDate(today);
     setIsTodayFilter(true);
-    setPage(1);
-    
-    let newFilters: any = {
-      ...filters,
-      date: format(today, "yyyy-MM-dd"),
-      status: undefined,
-      status_in: undefined,
-    };
-
-    if (inProductionProcessing) {
-      newFilters.status_in = "2,8,9,11,12,68,77,78";
-    } else if (onlyStatusOne) {
-      newFilters.status = 1;
-    } else if (onlyStatus78) {
-      newFilters.status = 78;
-    }
-
-    setFilters(newFilters);
+    setIsYesterdayFilter(false);
+    const todayString = format(today, "yyyy-MM-dd");
+    applyStatusFilters(onlyStatusOne, onlyStatus78, inProductionProcessing, todayString);
   };
 
   const handleYesterdayFilter = () => {
     const yesterday = new Date();
     yesterday.setDate(yesterday.getDate() - 1);
-  
+
     setSelectedDate(yesterday);
     setIsTodayFilter(false);
     setIsYesterdayFilter(true);
-    setPage(1);
-    
-    let newFilters: any = {
-      ...filters,
-      date: format(yesterday, "yyyy-MM-dd"),
-      status: undefined,
-      status_in: undefined,
-    };
-
-    if (inProductionProcessing) {
-      newFilters.status_in = "2,8,9,11,12,68,77,78";
-    } else if (onlyStatusOne) {
-      newFilters.status = 1;
-    } else if (onlyStatus78) {
-      newFilters.status = 78;
-    }
-
-    setFilters(newFilters);
+    const yesterdayString = format(yesterday, "yyyy-MM-dd");
+    applyStatusFilters(onlyStatusOne, onlyStatus78, inProductionProcessing, yesterdayString);
   };
   
-
-
-  const handleApplyFilter = () => {
-    setPage(1);
-    setIsTodayFilter(false);
-    setIsYesterdayFilter(false);
-    
-    let newFilters: any = {
-      ...filters,
-      date: selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined,
-      status: undefined,
-      status_in: undefined,
-    };
-
-    if (inProductionProcessing) {
-      newFilters.status_in = "2,8,9,11,12,68,77,78";
-    } else if (onlyStatusOne) {
-      newFilters.status = 1;
-    } else if (onlyStatus78) {
-      newFilters.status = 78;
-    }
-
-    setFilters(newFilters);
-  };
-
   const handleCopyAllNames = () => {
     const names = todayOrders
       .map((order) => order.shipping_address?.shipping_name)
@@ -302,13 +360,7 @@ export default function Orders() {
                 type="checkbox"
                 id="status-1"
                 checked={onlyStatusOne}
-                onChange={(e) => {
-                  setOnlyStatusOne(e.target.checked);
-                  if (e.target.checked) {
-                    setOnlyStatus78(false);
-                    setInProductionProcessing(false);
-                  }
-                }}
+                onChange={handleToggleStatusOne}
                 className="sr-only"
               />
               <div
@@ -317,13 +369,7 @@ export default function Orders() {
                     ? 'bg-blue-500 border-blue-500'
                     : 'bg-white border-gray-300 hover:border-gray-400'
                 }`}
-                onClick={() => {
-                  setOnlyStatusOne(!onlyStatusOne);
-                  if (!onlyStatusOne) {
-                    setOnlyStatus78(false);
-                    setInProductionProcessing(false);
-                  }
-                }}
+                onClick={handleToggleStatusOne}
               >
                 {onlyStatusOne && (
                   <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -337,6 +383,7 @@ export default function Orders() {
               className="text-sm font-medium cursor-pointer select-none"
             >
               Status = 1 (Order Received)
+              <span className="ml-2 text-xs text-gray-500">({statusOneCount})</span>
             </label>
           </div>
 
@@ -346,13 +393,7 @@ export default function Orders() {
                 type="checkbox"
                 id="status-78"
                 checked={onlyStatus78}
-                onChange={(e) => {
-                  setOnlyStatus78(e.target.checked);
-                  if (e.target.checked) {
-                    setOnlyStatusOne(false);
-                    setInProductionProcessing(false);
-                  }
-                }}
+                onChange={handleToggleStatusSeventyEight}
                 className="sr-only"
               />
               <div
@@ -361,13 +402,7 @@ export default function Orders() {
                     ? 'bg-red-500 border-red-500'
                     : 'bg-white border-gray-300 hover:border-gray-400'
                 }`}
-                onClick={() => {
-                  setOnlyStatus78(!onlyStatus78);
-                  if (!onlyStatus78) {
-                    setOnlyStatusOne(false);
-                    setInProductionProcessing(false);
-                  }
-                }}
+                onClick={handleToggleStatusSeventyEight}
               >
                 {onlyStatus78 && (
                   <svg className="h-3 w-3 text-white" fill="currentColor" viewBox="0 0 20 20">
@@ -381,6 +416,7 @@ export default function Orders() {
               className="text-sm font-medium cursor-pointer select-none"
             >
               Status = 78 (Fulfill Failed)
+              <span className="ml-2 text-xs text-gray-500">({statusSeventyEightCount})</span>
             </label>
           </div>
 
@@ -389,13 +425,7 @@ export default function Orders() {
               type="checkbox"
               id="in-production-processing"
               checked={inProductionProcessing}
-              onChange={(e) => {
-                setInProductionProcessing(e.target.checked);
-                if (e.target.checked) {
-                  setOnlyStatusOne(false);
-                  setOnlyStatus78(false);
-                }
-              }}
+              onChange={handleToggleInProduction}
               className="w-4 h-4 text-orange-600 bg-white border-gray-300 rounded focus:ring-orange-500 focus:ring-2 cursor-pointer"
             />
             <label
@@ -403,6 +433,7 @@ export default function Orders() {
               className="text-sm font-medium cursor-pointer select-none"
             >
               In-Production & Processing
+              <span className="ml-2 text-xs text-gray-500">({inProductionCount})</span>
             </label>
           </div>
 
@@ -415,12 +446,12 @@ export default function Orders() {
             <option value={500}>500 / page</option>
           </select>
 
-          <button
-            onClick={handleApplyFilter}
-            className="px-4 py-1 bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Apply Filter
-          </button>
+          {isFetching && (
+            <div className="flex items-center gap-2 text-sm text-blue-600">
+              <span className="inline-block h-4 w-4 border-b-2 border-blue-600 rounded-full animate-spin" />
+              <span>Đang tải...</span>
+            </div>
+          )}
 
           <button
             onClick={() => {

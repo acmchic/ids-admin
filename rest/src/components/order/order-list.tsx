@@ -33,7 +33,7 @@ import {
   UserAddress1,
 } from "@ts-types/generated";
 
-const ISSUE_API_BASE = process.env.NEXT_PUBLIC_REST_API_ENDPOINT
+const ISSUE_API_BASE = (process.env.NEXT_PUBLIC_REST_API_ENDPOINT || "/api").replace(/\/+$/, "")
 
 const logFulfilledOrders = async (orders: any[], statusCode: number) => {
   try {

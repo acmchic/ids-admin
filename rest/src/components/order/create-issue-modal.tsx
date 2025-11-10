@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 import axios from "axios";
 import { ClipboardList } from "lucide-react";
 
-const ISSUE_API_BASE = process.env.NEXT_PUBLIC_REST_API_ENDPOINT
+const ISSUE_API_BASE = (process.env.NEXT_PUBLIC_REST_API_ENDPOINT || "/api").replace(/\/+$/, "")
 
 interface CreateIssueModalProps {
   isOpen: boolean;
@@ -19,6 +19,7 @@ const ISSUE_TYPES = [
   { value: "change_variation", label: "Change Size / Màu / Vị trí" },
   { value: "replace", label: "Replace" },
   { value: "merge_order", label: "Gộp Đơn" },
+  { value: "refund", label: "Refund" },
 ];
 
 const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
@@ -206,53 +207,30 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     setLoading(true);
 
     try {
-      // For "New" type, just create issue without any updates
-      if (issueType === "new") {
-        const issueResponse = await fetch(`${ISSUE_API_BASE}/issues`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            order_id: order.id,
-            issue_type: issueType,
-            status: "open",
-            old_data: null,
-            new_data: null,
-            notes: notes,
-            created_by: "admin",
-          }),
-        });
+      const payload: Record<string, any> = {
+        order_id: order.id,
+        issue_type: issueType,
+        status: "open",
+        old_data: null,
+        new_data: null,
+        notes,
+        created_by: "admin",
+      };
 
-        const issueResult = await issueResponse.json().catch(() => null);
+      if (issueType === "refund") {
+        const paymentStatus =
+          orderDetails?.payment_status ??
+          order?.payment_status ??
+          null;
 
-        if (!issueResponse.ok || !issueResult?.success) {
-          const message =
-            issueResult?.error ||
-            issueResult?.message ||
-            (issueResult?.errors ? JSON.stringify(issueResult.errors) : undefined) ||
-            `HTTP ${issueResponse.status}: Failed to create issue`;
-          throw new Error(message);
-        }
-
-        toast.success("Đã  Create Ticket thành công!");
-        if (onIssueCreated) onIssueCreated();
-        handleClose();
-        setLoading(false);
-        return;
+        payload.old_data = { payment_status: paymentStatus };
+        payload.new_data = { payment_status: null };
       }
 
-      // For other types, create issue but don't resolve yet
       const issueResponse = await fetch(`${ISSUE_API_BASE}/issues`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          order_id: order.id,
-          issue_type: issueType,
-          status: "open",
-          old_data: null,
-          new_data: null,
-          notes: notes,
-          created_by: "admin",
-        }),
+        body: JSON.stringify(payload),
       });
 
       const issueResult = await issueResponse.json().catch(() => null);
