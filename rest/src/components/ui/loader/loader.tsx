@@ -1,4 +1,4 @@
-import { HashLoader } from "react-spinners";
+import { PuffLoader } from "react-spinners";
 import cn from "classnames";
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 }
 
 const Loader = (props: Props) => {
-  const { className, showText = true, text = "Loading..." } = props;
+  const { className, showText = true, text = "" } = props;
 
   return (
     <div
@@ -19,7 +19,7 @@ const Loader = (props: Props) => {
       )}
       style={{ height: "calc(100vh - 200px)" }}
     >
-      <HashLoader color="#36d7b7" size={50} />
+      <PuffLoader color="#36d7b7" size={50} />
 
       {showText && (
         <h1 className="text-lg font-semibold text-body italic">{text}</h1>

@@ -918,303 +918,191 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       ),
     },
     
-    {
-      title: "ATWORK",
-      dataIndex: "products",
-      key: "products",
-      align: "center",
-      width: 200,
-      render: (products: any[]) => (
-        <div className="flex flex-col">
-          {products.map((product, index) => {
-            // Check if this is a customize product
-            let displayImgUrl = "";
-            let linkUrl = "";
-            let isCustomize = false;
-            const API_URL = getApiUrl();
-            
-            if (product.is_customize && product.image) {
-              // Customize product - get image from products_customize table
-              try {
-                const images = (typeof product.image === 'string') 
-                  ? JSON.parse(product.image)
-                  : product.image;
-                
-                if (images && images.length > 0 && images[0].original) {
-                  const originalPath = images[0].original;
-                  // Build URL: API_URL + '/images/' + original
-                  displayImgUrl = `${API_URL}/images/${originalPath}`;
-                  linkUrl = displayImgUrl;
-                  isCustomize = true;
-                }
-              } catch (e) {
-                console.error("Parse customize image error:", e);
-              }
-            }
-            
-            // Regular product - use product.img_url
-            if (!displayImgUrl) {
-              let imgUrl = product.img_url || "";
-              
-              // Replace /_front/ or /_back/ with /atwork/ for display (detect position after /media/XXXX/)
-              if (imgUrl && imgUrl.includes('/media/')) {
-                const parts = imgUrl.split('/');
-                const mediaIndex = parts.findIndex(p => p === 'media');
-                
-                // Position after /media/3600/ is index + 2
-                if (mediaIndex !== -1 && parts.length > mediaIndex + 2) {
-                  const targetIndex = mediaIndex + 2;
-                  // Replace if starts with underscore (like _front, _back)
-                  if (parts[targetIndex] && parts[targetIndex].startsWith('_')) {
-                    parts[targetIndex] = 'atwork';
-                    imgUrl = parts.join('/');
-                  }
-                }
-              }
-              
-              displayImgUrl = imgUrl;
-              
-              // For linkUrl (click): Use original extension from products.image.original
-              linkUrl = imgUrl;
-              if (imgUrl && imgUrl.includes('/media/')) {
-                const parts = imgUrl.split('/');
-                const mediaIndex = parts.findIndex(p => p === 'media');
-                
-                // Take parts after /media/3600/atwork/dark-grey/ (index + 4 onwards)
-                if (mediaIndex !== -1 && parts.length > mediaIndex + 4) {
-                  const pathAfterColor = parts.slice(mediaIndex + 4).join('/');
-                  const baseUrl = imgUrl.split('/media/')[0];
-                  
-                  // Get original extension from products.image.original
-                  let originalExtension = '.webp'; // default
-                  try {
-                    const productImage = (typeof product.image === 'string') 
-                      ? JSON.parse(product.image)
-                      : product.image;
-                    
-                    if (productImage && productImage.original) {
-                      // Extract extension from original: "ids/gmc/file.png" → ".png"
-                      const originalPath = productImage.original;
-                      const lastDot = originalPath.lastIndexOf('.');
-                      if (lastDot !== -1) {
-                        originalExtension = originalPath.substring(lastDot);
-                      }
-                    }
-                  } catch (e) {
-                    console.error('Failed to parse product.image:', e);
-                  }
-                  
-                  // Replace extension in pathAfterColor
-                  // pathAfterColor = "ids/gmc/file.webp" → "ids/gmc/file.png"
-                  const pathParts = pathAfterColor.split('/');
-                  const fileName = pathParts[pathParts.length - 1];
-                  const fileNameWithoutExt = fileName.substring(0, fileName.lastIndexOf('.'));
-                  const newFileName = fileNameWithoutExt + originalExtension;
-                  pathParts[pathParts.length - 1] = newFileName;
-                  
-                  linkUrl = `${baseUrl}/images/${pathParts.join('/')}`;
-                }
-              }
-            }
+   {
+  title: "ATWORK",
+  dataIndex: "products",
+  key: "products",
+  align: "center",
+  width: 200,
+  render: (products: any[]) => {
+    const API_URL = getApiUrl();
 
-            function getImageFolderPath(url?: string): string {
-              if (!url) return "CUSTOMIZE"
-              
-              // For media URLs: http://localhost:3007/media/3600/atwork/dark-grey/ids/gmc/file.webp
-              // For images URLs: http://localhost:3007/images/ids/gmc/file.webp
-              
-              if (url.includes("/images/")) {
-                // Extract after /images/
-                const afterImages = url.split("/images/")[1];
-                if (!afterImages) return "N/A";
-                
-                // Take first 2 parts: ids/gmc
-                const parts = afterImages.split("/");
-                return parts.slice(0, 2).join("/") || "N/A";
-              }
-              
-              if (url.includes("/media/")) {
-                // Extract after /media/
-                const afterMedia = url.split("/media/")[1];
-                if (!afterMedia) return "N/A";
-                
-                // Format: 3600/atwork/dark-grey/ids/gmc/file.webp
-                // Index:  0    1      2          3   4    5
-                // Want: ids/gmc (index 3-4)
-                const parts = afterMedia.split("/");
-                const path = parts.slice(3, 5).join("/");
-                
-                if (!path || path === "/") return "N/A";
-                return path;
-              }
-              
-              return "N/A";
+    /** ===============================
+     *  🔧 Helper functions (Memoized)
+     *  =============================== */
+    const parseImageData = (imgData: any): any => {
+      if (!imgData) return null;
+      if (typeof imgData === "string") {
+        try {
+          return JSON.parse(imgData);
+        } catch {
+          return null;
+        }
+      }
+      return imgData;
+    };
+
+    const buildCustomizeImageUrl = (product: any): string | null => {
+      const images = parseImageData(product.image);
+      if (images?.[0]?.original) return `${API_URL}/images/${images[0].original}`;
+      return null;
+    };
+
+    const buildRegularImageUrls = (product: any): { display: string; link: string } => {
+      let imgUrl = product.img_url || "";
+      if (!imgUrl) return { display: "", link: "" };
+
+      // Convert _front/_back → atwork
+      if (imgUrl.includes("/media/")) {
+        const parts = imgUrl.split("/");
+        const mediaIndex = parts.indexOf("media");
+        const targetIndex = mediaIndex + 2;
+        if (parts[targetIndex]?.startsWith("_")) parts[targetIndex] = "atwork";
+        imgUrl = parts.join("/");
+      }
+
+      let linkUrl = imgUrl;
+      // Build link URL only once
+
+      return { display: imgUrl, link: linkUrl };
+    };
+
+    const getFolderPath = (url?: string): string => {
+      if (!url) return "CUSTOMIZE";
+      if (url.includes("/images/")) return url.split("/images/")[1]?.split("/").slice(0, 2).join("/") || "N/A";
+      if (url.includes("/media/")) {
+        const parts = url.split("/media/")[1]?.split("/") || [];
+        return parts.slice(3, 5).join("/") || "N/A";
+      }
+      return "N/A";
+    };
+
+    const getImagePathForUpload = (url: string): string => {
+      const parts = url.split("/");
+      const imagesIndex = parts.indexOf("images");
+      return imagesIndex !== -1 ? parts.slice(imagesIndex + 1, -1).join("/") : "custom";
+    };
+
+    /** ===============================
+     *  🧩 Render each product (memoized)
+     *  =============================== */
+    return (
+      <div className="flex flex-col">
+        {products.map((product, index) => {
+          // 👉 Dùng useMemo để tránh tính toán lại cho từng render (nếu dùng React component)
+          let displayImgUrl = "";
+          let linkUrl = "";
+          let isCustomize = false;
+
+          if (product.is_customize && product.image) {
+            const url = buildCustomizeImageUrl(product);
+            if (url) {
+              displayImgUrl = url;
+              linkUrl = url;
+              isCustomize = true;
             }
-            
-            const folderPath = getImageFolderPath(displayImgUrl)
-            const isCustomizeProduct = product.is_customize === 1 || product.is_customize === true || isCustomize;
+          }
 
+          if (!displayImgUrl) {
+            const { display, link } = buildRegularImageUrls(product);
+            displayImgUrl = display;
+            linkUrl = link;
+          }
 
-            if (!displayImgUrl) {
-              return (
-                <div
-                  key={`${product.id}-${index}`}
-                  className="mb-2 text-center"
-                >
-                  <div className="w-[130px] h-[150px] bg-gray-200 rounded-md flex items-center justify-center text-gray-500 text-xs">
-                    No Image
-                  </div>
-                </div>
-              );
-            }
+          const folderPath = getFolderPath(displayImgUrl);
+          const isCustomizeProduct = product.is_customize === 1 || product.is_customize === true || isCustomize;
 
+          /** 🚫 Không có ảnh → render placeholder */
+          if (!displayImgUrl) {
             return (
-              <div
-                key={`${product.id}-${index}`}
-                className={`mb-2 text-center p-2 rounded ${
-                  isCustomizeProduct ? 'bg-yellow-100 border-2 border-yellow-400' : ''
-                }`}
-              >
-                {isCustomizeProduct && (
-                  <div className="mb-1">
-                    <span className="inline-block px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded shadow-md">
-                      CUSTOMIZE
-                    </span>
-                  </div>
-                )}
-                
-                <div className="inline-block transition-transform transform hover:scale-150 relative">
-                  <a
-                    href={linkUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <Image
-                      src={displayImgUrl}
-                      alt={product.name || 'Product image'}
-                      width={130}
-                      height={150}
-                      className="rounded-md object-cover"
-                    />
-                  </a>
-                </div>
-
-                <p className="text-xs text-gray-500 mt-1">
-                  {folderPath || 'N/A'}
-                </p>
-
-                {/* Upload Button - Moved below text */}
-                {(() => {
-                  // For customize products, use displayImgUrl (already built above)
-                  // For regular products, use product.img_url
-                  const imgUrl = isCustomize ? displayImgUrl : product.img_url;
-                  if (!imgUrl) return null;
-                  
-                  const urlParts = imgUrl.split('/');
-                  const fileName = urlParts[urlParts.length - 1];
-                  
-                  // Extract path from URL (after /images/)
-                  let imagePath = 'custom';
-                  
-                  if (isCustomize) {
-                    // For customize: extract from /images/customize/25_11_05/{fileName}
-                    // imagePath should be: customize/25_11_05
-                    const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
-                    if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
-                      const pathParts = urlParts.slice(imagesIndex + 1, -1);
-                      imagePath = pathParts.join('/');
-                    }
-                  } else {
-                    // For regular: extract from /images/...
-                    const imagesIndex = urlParts.findIndex((part: string) => part === 'images');
-                    if (imagesIndex !== -1 && imagesIndex + 1 < urlParts.length - 1) {
-                      const pathParts = urlParts.slice(imagesIndex + 1, -1);
-                      imagePath = pathParts.join('/');
-                    }
-                  }
-
-                  const uploadKey = `${product.id}-image`;
-                  const isUploading = uploadingImages[uploadKey];
-
-                  return (
-                    <div className="mt-2 flex justify-center">
-                      <input
-                        ref={(el) => {
-                          fileInputRefs.current[uploadKey] = el;
-                        }}
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) => handleImageUpload(e, product.id.toString(), imagePath, fileName)}
-                        className="hidden"
-                      />
-                      <button
-                        onClick={() => fileInputRefs.current[uploadKey]?.click()}
-                        disabled={isUploading}
-                        className={`flex items-center gap-1 px-2 py-1 text-xs text-white rounded hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg ${
-                          isCustomize ? 'bg-pink-500 hover:bg-pink-600' : 'bg-blue-500 hover:bg-blue-600'
-                        }`}
-                        title={isCustomize ? "Upload new customize artwork" : "Upload new artwork image"}
-                      >
-                        {isUploading ? (
-                          <span className="w-3 h-3 animate-spin">⏳</span>
-                        ) : (
-                          <span className="w-3 h-3">📤</span>
-                        )}
-                        {isUploading ? 'Up...' : 'Up'}
-                      </button>
-                    </div>
-                  );
-                })()}
-
-                {/* Display image path */}
-                <div className="mt-1">
-                  {(() => {
-                    // Lấy path từ URL gốc để hiển thị
-                    const originalUrl = product.pivot?.img_url || product.img_url;
-                    if (!originalUrl) return null;
-
-                    const urlParts = originalUrl.split("/");
-                    const imagesIndex = urlParts.findIndex((part: string) => part === "images");
-                    let imagePath = "";
-
-                    if (imagesIndex !== -1 && imagesIndex + 2 < urlParts.length) {
-                      // Lấy 2 phần sau "images" (ví dụ: w_shirt/tv)
-                      imagePath = urlParts.slice(imagesIndex + 1, imagesIndex + 3).join("/");
-                    }
-
-                    if (!imagePath) return null;
-
-                    const isCustomize = imagePath.toLowerCase().includes("customize");
-
-                    let textClass = "text-xs font-mono";
-                    if (isCustomize) {
-                      textClass += " text-green-500 font-bold animate-pulse";
-                    } else {
-                      textClass += " text-gray-600";
-                    }
-
-                    return (
-                      <a
-                        href={linkUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className={`${textClass} hover:underline cursor-pointer`}
-                      >
-                        {isCustomize ? imagePath.toUpperCase() : imagePath}
-                      </a>
-                    );
-                  })()}
+              <div key={`${product.id}-${index}`} className="mb-2 text-center">
+                <div className="w-[130px] h-[150px] bg-gray-200 rounded-md flex items-center justify-center text-gray-500 text-xs">
+                  No Image
                 </div>
               </div>
             );
-          })}
-        </div>
-      ),
-    }
-,
-    
-    
+          }
 
+          const uploadKey = `${product.id}-image`;
+          const isUploading = uploadingImages[uploadKey];
+          const imagePath = getImagePathForUpload(displayImgUrl);
+          const fileName = displayImgUrl.split("/").pop() || "unknown";
+
+          /** ✅ Render chính */
+          return (
+            <div
+              key={`${product.id}-${index}`}
+              className={`mb-2 text-center p-2 rounded ${
+                isCustomizeProduct ? "bg-yellow-100 border-2 border-yellow-400" : ""
+              }`}
+            >
+              {isCustomizeProduct && (
+                <div className="mb-1">
+                  <span className="inline-block px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded shadow-md">
+                    CUSTOMIZE
+                  </span>
+                </div>
+              )}
+
+              <div className="inline-block transition-transform transform hover:scale-150 relative">
+                {/* 🧠 Next/Image tự cache theo src → không gọi lại server khi src không đổi */}
+                <a href={linkUrl} target="_blank" rel="noopener noreferrer">
+                  <Image
+                    src={displayImgUrl}
+                    alt={product.name || "Product image"}
+                    width={130}
+                    height={150}
+                    className="rounded-md object-cover"
+                    loading="lazy"
+                    priority={false}
+                  />
+                </a>
+              </div>
+
+              <p className="text-xs text-gray-500 mt-1">{folderPath || "N/A"}</p>
+
+              <div className="mt-2 flex justify-center">
+                <input
+                  ref={(el) => (fileInputRefs.current[uploadKey] = el)}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => handleImageUpload(e, product.id.toString(), imagePath, fileName)}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => fileInputRefs.current[uploadKey]?.click()}
+                  disabled={isUploading}
+                  className={`flex items-center gap-1 px-2 py-1 text-xs text-white rounded hover:opacity-90 disabled:opacity-50 shadow-lg ${
+                    isCustomizeProduct ? "bg-pink-500 hover:bg-pink-600" : "bg-blue-500 hover:bg-blue-600"
+                  }`}
+                >
+                  {isUploading ? <span className="w-3 h-3 animate-spin">⏳</span> : <span className="w-3 h-3">📤</span>}
+                  {isUploading ? "Up..." : "Up"}
+                </button>
+              </div>
+
+              {/* 🔗 Image path */}
+              <a
+                href={linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={`block mt-1 text-xs font-mono ${
+                  folderPath.toLowerCase().includes("customize")
+                    ? "text-green-500 font-bold animate-pulse"
+                    : "text-gray-600"
+                } hover:underline cursor-pointer`}
+              >
+                {folderPath.toUpperCase()}
+              </a>
+            </div>
+          );
+        })}
+      </div>
+    );
+  },
+}
+
+,
     {
       title: (
         <TitleWithSort
