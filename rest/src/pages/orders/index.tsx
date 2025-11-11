@@ -16,6 +16,13 @@ import { format } from "date-fns";
 import { ClipboardCopy } from "lucide-react";
 import { toast } from "react-toastify";
 
+type OrderFilters = {
+  text: string;
+  date?: string;
+  status?: number;
+  status_in?: string;
+};
+
 export default function Orders() {
   const { t } = useTranslation();
   const [page, setPage] = useState(1);
@@ -26,7 +33,7 @@ export default function Orders() {
   const [onlyStatus78, setOnlyStatus78] = useState(false);
   const [inProductionProcessing, setInProductionProcessing] = useState(false);
   const [limit, setLimit] = useState(200);
-  const [filters, setFilters] = useState({ text: "", date: undefined, status: undefined, status_in: undefined });
+  const [filters, setFilters] = useState<OrderFilters>({ text: "", date: undefined, status: undefined, status_in: undefined });
   const [isTodayFilter, setIsTodayFilter] = useState(false);
   const [isYesterdayFilter, setIsYesterdayFilter] = useState(false);
 
@@ -40,7 +47,25 @@ export default function Orders() {
 
   const IN_PRODUCTION_STATUS_IDS = useMemo(() => [2, 8, 9, 11, 12, 68, 77, 78], []);
 
-  const todayOrders = data?.orders?.data || [];
+  const todayOrders = (data?.orders?.data as any[]) || [];
+  const totalTodayCount = useMemo(() => todayOrders.length, [todayOrders]);
+  const totalTodayAmount = useMemo(
+    () =>
+      todayOrders.reduce((sum: number, order: any) => sum + (Number(order?.paid_total) || 0), 0),
+    [todayOrders]
+  );
+  const formattedTotalTodayAmount = useMemo(
+    () =>
+      totalTodayAmount.toLocaleString("en-US", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }),
+    [totalTodayAmount]
+  );
+  const formattedTotalTodayCount = useMemo(
+    () => totalTodayCount.toLocaleString("en-US"),
+    [totalTodayCount]
+  );
   const statusOneCount = useMemo(
     () => todayOrders.filter((order) => Number(order.status?.id) === 1).length,
     [todayOrders]
@@ -51,9 +76,17 @@ export default function Orders() {
   );
   const inProductionCount = useMemo(
     () =>
-      todayOrders.filter((order) => IN_PRODUCTION_STATUS_IDS.includes(Number(order.status?.id))).length,
+      todayOrders.filter((order: any) => IN_PRODUCTION_STATUS_IDS.includes(Number(order.status?.id))).length,
     [todayOrders, IN_PRODUCTION_STATUS_IDS]
   );
+
+  const dateFilter = filters.date;
+  const revenueSummaryLabel = useMemo(() => {
+    if (isTodayFilter) return "Today's Revenue";
+    if (isYesterdayFilter) return "Yesterday's Revenue";
+    if (dateFilter) return `Revenue (${dateFilter})`;
+    return "";
+  }, [dateFilter, isTodayFilter, isYesterdayFilter]);
 
   // Load stats for today and yesterday - OPTIMIZED
 
@@ -90,11 +123,11 @@ export default function Orders() {
 
       setPage(1);
       setFilters((prev) => {
-        const next = {
+        const next: OrderFilters = {
           ...prev,
           date: dateValue,
-          status: undefined as number | undefined,
-          status_in: undefined as string | undefined,
+          status: undefined,
+          status_in: undefined,
         };
 
         if (production) {
@@ -247,6 +280,18 @@ export default function Orders() {
 </div>
 
         </div>
+
+        {(isTodayFilter || isYesterdayFilter || dateFilter) && (
+          <div className="flex flex-wrap items-center gap-3 rounded border border-gray-200 bg-gray-50 px-3 py-2">
+            {!!revenueSummaryLabel && <span className="text-sm font-semibold text-gray-700">{revenueSummaryLabel}</span>}
+            <div className="flex items-center gap-3">
+              <span className="text-lg font-semibold text-emerald-600">${formattedTotalTodayAmount}</span>
+              <span className="text-xs text-gray-500">
+                {formattedTotalTodayCount} order{totalTodayCount === 1 ? "" : "s"}
+              </span>
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-wrap gap-4 items-center justify-between">
           <DatePicker

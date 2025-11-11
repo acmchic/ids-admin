@@ -153,6 +153,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   const [selectedOrders, setSelectedOrders] = useState<Record<string, number>>({});
   const [sortingObj, setSortingObj] = useState<{ sort: SortOrder; column: string | null }>({ sort: SortOrder.Desc, column: null });
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
+  const [selectionSummary, setSelectionSummary] = useState<string>("");
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   
   // Create Issue Modal state
@@ -236,6 +237,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       newSelections[order.id] = 2; // G status
     });
     setSelectedOrders(newSelections);
+    setSelectionSummary("");
     
     console.log(`✅ All G: Selected ${ordersWithStatus1.length} orders with status = 1`);
   };
@@ -251,6 +253,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       newSelections[order.id] = 9; // B status
     });
     setSelectedOrders(newSelections);
+    setSelectionSummary("");
     
     console.log(`✅ All B: Selected ${ordersWithStatus1.length} orders with status = 1`);
   };
@@ -266,6 +269,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       newSelections[order.id] = 69; // M status
     });
     setSelectedOrders(newSelections);
+    setSelectionSummary("");
     
     console.log(`✅ All M: Selected ${ordersWithStatus.length} orders with status = 1 or 78`);
   };
@@ -294,10 +298,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     });
 
     setSelectedOrders(normalized);
-
-    toast.success(
-      `Đã chọn ${eligibleOrders.length} đơn: Burger ${burgerCount}, Mango ${mangoCount}`
-    );
+    setSelectionSummary(`Đã chọn ${eligibleOrders.length} đơn: Burger ${burgerCount}, Mango ${mangoCount}`);
   };
 
   const onHeaderClick = (column: string | null) => ({
@@ -389,6 +390,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
       toast.success(`✅ DONE! All ${totalOrders} orders fulfilled.`);
       setSelectedOrders({});
+      setSelectionSummary("");
       
       // Hide progress after 2 seconds
       setTimeout(() => {
@@ -1582,7 +1584,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             All
           </button>
           <button
-            onClick={() => setSelectedOrders({})}
+            onClick={() => {
+              setSelectedOrders({});
+              setSelectionSummary("");
+            }}
             className="px-4 py-2 bg-gray-500 text-white rounded hover:bg-gray-600"
           >
             Clear All
@@ -1605,6 +1610,11 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 `Fulfill Selected (${Object.keys(selectedOrders).length})`
               )}
             </button>
+            {selectionSummary && (
+              <span className="text-sm text-gray-600">
+                {selectionSummary}
+              </span>
+            )}
             
             {/* Progress indicator */}
             {fulfillProgress.isProcessing && (
