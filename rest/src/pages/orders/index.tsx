@@ -181,30 +181,7 @@ export default function Orders() {
     applyStatusFilters(nextStatusOne, nextStatus78, nextProduction);
   };
 
-  const handleExportImageList = () => {
-    const imageList = [];
-
-    for (const order of todayOrders) {
-      for (const product of order.products || []) {
-        if (product.img_url) {
-          imageList.push({
-            order_id: order.id,
-            product_id: product.id,
-            img_url: product.img_url
-          });
-        }
-      }
-    }
-
-    const blob = new Blob([JSON.stringify(imageList, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "image_urls.json";
-    link.click();
-  };
-
+  
   const handleTodayFilter = () => {
     const today = new Date();
     setSelectedDate(today);
@@ -225,15 +202,7 @@ export default function Orders() {
     applyStatusFilters(onlyStatusOne, onlyStatus78, inProductionProcessing, yesterdayString);
   };
   
-  const handleCopyAllNames = () => {
-    const names = todayOrders
-      .map((order) => order.shipping_address?.shipping_name)
-      .filter(Boolean)
-      .join("\n");
-
-    navigator.clipboard.writeText(names);
-    toast.success("All names copied!");
-  };
+  
   
 
   return (
@@ -255,28 +224,7 @@ export default function Orders() {
   >
     Yesterday
   </button>
-
-  {(isTodayFilter || isYesterdayFilter) && (
-    <>
-      <button
-        onClick={handleCopyAllNames}
-        className="flex items-center gap-1 text-sm text-gray-700 hover:text-black"
-        title="Copy all customer names"
-      >
-        <ClipboardCopy className="w-4 h-4" />
-        Copy All Names
-      </button>
-      <button
-        onClick={handleExportImageList}
-        className="flex items-center gap-1 text-sm text-gray-700 hover:text-black"
-        title="Generate List IMG"
-      >
-        <ClipboardCopy className="w-4 h-4 rotate-180" />
-        Generate List IMG
-      </button>
-
-    </>
-  )}
+  
 </div>
 
         </div>

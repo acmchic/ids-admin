@@ -1020,7 +1020,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     return (
       <div className="flex flex-col">
         {products.map((product, index) => {
-          // 👉 Dùng useMemo để tránh tính toán lại cho từng render (nếu dùng React component)
           let displayImgUrl = "";
           let linkUrl = "";
           let isCustomize = false;
@@ -1043,7 +1042,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           const folderPath = getFolderPath(displayImgUrl);
           const isCustomizeProduct = product.is_customize === 1 || product.is_customize === true || isCustomize;
 
-          /** 🚫 Không có ảnh → render placeholder */
           if (!displayImgUrl) {
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
@@ -1090,7 +1088,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 </a>
               </div>
 
-              <p className="text-xs text-gray-500 mt-1">{folderPath || "N/A"}</p>
 
               <div className="mt-2 flex justify-center">
                 <input
