@@ -23,6 +23,66 @@ const ISSUE_TYPES = [
   { value: "refund", label: "Refund" },
 ];
 
+const NEW_ISSUE_PRESETS = [
+  { value: "dang_sua_pink", label: "Đang sửa PINK" },
+  { value: "doi_khach_confirm", label: "Đợi khách confirm" },
+  { value: "other", label: "Other" },
+];
+
+const getNewIssueLabel = (value: string) => NEW_ISSUE_PRESETS.find((item) => item.value === value)?.label || value;
+
+const parseNewIssueNotes = (note?: string) => {
+  if (!note) {
+    return { selections: [] as string[], otherNote: "" };
+  }
+
+  const parts = note
+    .split("|")
+    .map((part) => part.trim())
+    .filter(Boolean);
+
+  const selections: string[] = [];
+  let otherNote = "";
+
+  parts.forEach((part) => {
+    const preset = NEW_ISSUE_PRESETS.find((item) => item.label === part);
+    if (preset && preset.value !== "other") {
+      selections.push(preset.value);
+    } else if (preset && preset.value === "other") {
+      selections.push("other");
+    } else {
+      otherNote = otherNote ? `${otherNote} ${part}` : part;
+    }
+  });
+
+  if (otherNote && !selections.includes("other")) {
+    selections.push("other");
+  }
+
+  return { selections, otherNote };
+};
+
+const composeNewIssueNotes = (selectedTags: string[], otherNote: string) => {
+  const parts: string[] = [];
+
+  selectedTags.forEach((value) => {
+    if (value === "other") {
+      return;
+    }
+    parts.push(getNewIssueLabel(value));
+  });
+
+  if (selectedTags.includes("other")) {
+    const trimmed = otherNote.trim();
+    if (!trimmed) {
+      throw new Error("Vui lòng nhập ghi chú cho mục Other");
+    }
+    parts.push(trimmed);
+  }
+
+  return parts.join(" | ");
+};
+
 const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   isOpen,
   onClose,
@@ -61,6 +121,8 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     return orderDetails.order_product.filter((product: any) => Boolean(product.upscayl_image));
   }, [orderDetails]);
 
+  const [selectedNewIssueTags, setSelectedNewIssueTags] = useState<string[]>([]);
+
   // Load order details and existing issues when modal opens
   useEffect(() => {
     if (isOpen && order) {
@@ -68,6 +130,23 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       loadExistingIssues();
     }
   }, [isOpen, order]);
+
+  useEffect(() => {
+    if (issueType !== "new") {
+      setSelectedNewIssueTags([]);
+    }
+  }, [issueType]);
+
+  const handleToggleNewIssueTag = (value: string) => {
+    setSelectedNewIssueTags((prev) => {
+      const exists = prev.includes(value);
+      const next = exists ? prev.filter((item) => item !== value) : [...prev, value];
+      if (!next.includes("other")) {
+        setNotes("");
+      }
+      return next;
+    });
+  };
 
   // Load mergeable orders when issue type is merge_order
   useEffect(() => {
@@ -147,7 +226,13 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           setOpenIssue(open);
           // Auto-fill form with open issue data
           setIssueType(open.issue_type);
-          setNotes(open.notes || "");
+          if (open.issue_type === "new") {
+            const parsed = parseNewIssueNotes(open.notes);
+            setSelectedNewIssueTags(parsed.selections);
+            setNotes(parsed.otherNote || "");
+          } else {
+            setNotes(open.notes || "");
+          }
           
           // Load old_data into JSON editor if available
           if (open.old_data) {
@@ -213,13 +298,24 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     setLoading(true);
 
     try {
+      let noteContent = notes;
+      if (issueType === "new") {
+        try {
+          noteContent = composeNewIssueNotes(selectedNewIssueTags, notes);
+        } catch (error: any) {
+          toast.error(error?.message || "Vui lòng chọn nội dung cho ticket");
+          setLoading(false);
+          return;
+        }
+      }
+
       const payload: Record<string, any> = {
         order_id: order.id,
         issue_type: issueType,
         status: "open",
         old_data: null,
         new_data: null,
-        notes,
+        notes: noteContent,
         created_by: "admin",
       };
 
@@ -653,6 +749,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     setLoadingMergeableOrders(false);
     setExistingIssues([]);
     setOpenIssue(null);
+    setSelectedNewIssueTags([]);
     onClose();
   };
 
@@ -938,6 +1035,26 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     </div>
   );
 
+  const renderNewIssuePresets = () => (
+    <div className="space-y-3">
+      <h3 className="font-semibold text-md mb-3">Preset Tags</h3>
+      {NEW_ISSUE_PRESETS.map((preset) => (
+        <div key={preset.value} className="flex items-center">
+          <input
+            type="checkbox"
+            id={`preset-${preset.value}`}
+            checked={selectedNewIssueTags.includes(preset.value)}
+            onChange={() => handleToggleNewIssueTag(preset.value)}
+            className="mr-2 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+          />
+          <label htmlFor={`preset-${preset.value}`} className="text-sm text-gray-700">
+            {preset.label}
+          </label>
+        </div>
+      ))}
+    </div>
+  );
+
   return (
     <Modal open={isOpen} onClose={handleClose}>
       <div className="bg-white rounded-lg shadow-xl w-[75vw] mx-auto">
@@ -1009,8 +1126,9 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
               {issueType === "reset_upscayl" && renderResetUpscaylInfo()}
               {issueType === "replace" && renderReplaceForm()}
               {issueType === "merge_order" && renderMergeForm()}
+              {issueType === "new" && renderNewIssuePresets()}
 
-              {issueType && (
+              {issueType && (issueType !== "new" || selectedNewIssueTags.includes("other")) && (
                 <div className="mt-4">
                   <label className="block text-sm font-medium mb-2">Note</label>
                   <textarea
@@ -1018,7 +1136,12 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
                     onChange={(e) => setNotes(e.target.value)}
                     rows={4}
                     className="w-full px-3 py-2 border rounded"
-                    placeholder="Thêm ghi chú nếu cần..."
+                    placeholder={
+                      issueType === "new"
+                        ? "Nhập ghi chú khác tại đây..."
+                        : "Thêm ghi chú nếu cần..."
+                    }
+                    disabled={issueType === "new" && !selectedNewIssueTags.includes("other")}
                   />
                 </div>
               )}

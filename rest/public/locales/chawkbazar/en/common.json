@@ -42,7 +42,7 @@
   "attribute": "Attribute",
   "attribute-values": "Attribute Values",
   "pixel": "Pixel",
-  "text-loading": "Loading...",
+  "text-loading": "",
   "sidebar-nav-item-dashboard": "Dashboard",
   "sidebar-nav-item-products": "Products",
   "sidebar-nav-item-attributes": "Attributes",

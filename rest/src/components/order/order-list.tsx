@@ -99,8 +99,43 @@ const nameToSlug = (name: string) =>
     .replace(/\s+/g, "-")
     .trim();
 
-const convertToAtworkUrl = (imgUrl: string): string =>
-  imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
+const colorToSlug = (color?: string): string | undefined => {
+  if (!color) return undefined;
+  const slug = color
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return slug || undefined;
+};
+
+const convertToAtworkUrl = (imgUrl: string, colorSlug?: string): string => {
+  if (!imgUrl) return imgUrl;
+
+  if (imgUrl.includes("/images/") && colorSlug) {
+    const [prefix, path] = imgUrl.split("/images/");
+    if (path) {
+      return `${prefix}/media/3600/atwork/${colorSlug}/${path}`;
+    }
+  }
+
+  if (imgUrl.includes("/media/")) {
+    return imgUrl.replace(/\/media\/(\d+)\/[^/]+\//, "/media/$1/atwork/");
+  }
+
+  return imgUrl;
+};
+
+const parseVariation = (variation: any) => {
+  if (!variation) return null;
+  if (typeof variation === "string") {
+    try {
+      return JSON.parse(variation);
+    } catch (error) {
+      return null;
+    }
+  }
+  return variation;
+};
 
 // Function to get original artwork URL from pivot.img_url
 const getOriginalArtworkUrl = (pivotImgUrl: string): string => {
@@ -949,22 +984,18 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     };
 
     const buildRegularImageUrls = (product: any): { display: string; link: string } => {
-      let imgUrl = product.img_url || "";
-      if (!imgUrl) return { display: "", link: "" };
+      const baseUrl = product.img_url || product.pivot?.img_url || "";
+      if (!baseUrl) return { display: "", link: "" };
 
-      // Convert _front/_back → atwork
-      if (imgUrl.includes("/media/")) {
-        const parts = imgUrl.split("/");
-        const mediaIndex = parts.indexOf("media");
-        const targetIndex = mediaIndex + 2;
-        if (parts[targetIndex]?.startsWith("_")) parts[targetIndex] = "atwork";
-        imgUrl = parts.join("/");
-      }
+      const variation = parseVariation(product.pivot?.variation || product.variation);
+      const colorSlug = colorToSlug(variation?.color);
 
-      let linkUrl = imgUrl;
-      // Build link URL only once
+      const displayUrl = convertToAtworkUrl(baseUrl, colorSlug);
 
-      return { display: imgUrl, link: linkUrl };
+      return {
+        display: displayUrl,
+        link: baseUrl,
+      };
     };
 
     const getFolderPath = (url?: string): string => {
@@ -1321,21 +1352,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                   </span>
                 </div>
               )}
-              {/* Fulfill Button */}
 
-              <button
-                onClick={handleMerchize}
-                disabled={loadingRows[`merchize-${id}`]}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-500 hover:bg-green-600 transition"
-              >
-                {loadingRows[`merchize-${id}`] ? (
-                  <ClockLoader size={15} color="#fff" loading={loadingRows[`merchize-${id}`]} />
-                ) : (
-                  ''
-                )}
-                Merchize
-              </button>
-              
               {/* MangoPrint Button */}
               <button
                 onClick={handleMangoPrint}
@@ -1359,11 +1376,26 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 {loadingRows[`burger-${id}`] ? (
                   <ClockLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
                 ) : (
-                  ''
+                  <span className="text-lg">🍔</span>
                 )}
                 Burger
               </button>
 
+              {/* Merchize Button */}
+              <button
+                onClick={handleMerchize}
+                disabled={loadingRows[`merchize-${id}`]}
+                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-500 hover:bg-green-600 transition"
+              >
+                {loadingRows[`merchize-${id}`] ? (
+                  <ClockLoader size={15} color="#fff" loading={loadingRows[`merchize-${id}`]} />
+                ) : (
+                  ''
+                )}
+                Merchize
+              </button>
+              
+              {/* Fulfill Button */}
               <button
                 onClick={handleFulfill}
                 disabled={loadingRows[id]}
@@ -1455,14 +1487,16 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           </button>
           <button
             onClick={handleSelectAllB}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 flex items-center gap-2"
           >
+            <span className="text-lg">🍔</span>
             All B 
           </button>
           <button
             onClick={handleSelectAllM}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold"
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-semibold flex items-center gap-2"
           >
+            <span className="text-lg">🥭</span>
             All M 
           </button>
           <button
