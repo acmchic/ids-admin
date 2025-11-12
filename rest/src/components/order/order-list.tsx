@@ -9,7 +9,6 @@ import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
-import { format } from "date-fns";
 import { useFailedOrders } from "../../hooks/useFailedOrders";
 
 import { Table } from "@components/ui/table";
@@ -17,11 +16,12 @@ import Pagination from "@components/ui/pagination";
 import ActionButtons from "@components/common/action-buttons";
 import TitleWithSort from "@components/ui/title-with-sort";
 import Link from "@components/ui/link";
+import Button from "@components/ui/button";
 import { ClockLoader } from "react-spinners";
 
 import { useIsRTL } from "@utils/locals";
 import { UsState } from "../../utils/us-states";
-import { AlertTriangle, Search } from "lucide-react";
+import { AlertTriangle, Search, UploadCloud } from "lucide-react";
 import { getApiUrl } from "../../config/api";
 import CreateIssueModal from "./create-issue-modal";
 import { validateZipcode } from "../../utils/zipcode-validator";
@@ -1057,7 +1057,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           const imagePath = getImagePathForUpload(displayImgUrl);
           const fileName = displayImgUrl.split("/").pop() || "unknown";
 
-          /** ✅ Render chính */
           return (
             <div
               key={`${product.id}-${index}`}
@@ -1073,7 +1072,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 </div>
               )}
 
-              <div className="inline-block transition-transform transform hover:scale-150 relative">
+              <div className="inline-block transition-transform transform relative">
                 {/* 🧠 Next/Image tự cache theo src → không gọi lại server khi src không đổi */}
                 <a href={linkUrl} target="_blank" rel="noopener noreferrer">
                   <Image
@@ -1097,16 +1096,19 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                   onChange={(e) => handleImageUpload(e, product.id.toString(), imagePath, fileName)}
                   className="hidden"
                 />
-                <button
+                <Button
                   onClick={() => fileInputRefs.current[uploadKey]?.click()}
                   disabled={isUploading}
-                  className={`flex items-center gap-1 px-2 py-1 text-xs text-white rounded hover:opacity-90 disabled:opacity-50 shadow-lg ${
-                    isCustomizeProduct ? "bg-pink-500 hover:bg-pink-600" : "bg-blue-500 hover:bg-blue-600"
+                  loading={isUploading}
+                  variant="outline"
+                  size="small"
+                  className={`gap-2 text-white shadow-md hover:shadow-lg focus:shadow-none ${
+                    isCustomizeProduct ? "bg-pink-600 hover:bg-pink-700" : "bg-black hover:bg-blue-700"
                   }`}
                 >
-                  {isUploading ? <span className="w-3 h-3 animate-spin">⏳</span> : <span className="w-3 h-3">📤</span>}
-                  {isUploading ? "Up..." : "Up"}
-                </button>
+                  <UploadCloud className="h-4 w-4" />
+                  <span>{isUploading ? "Uploading..." : ""}</span>
+                </Button>
               </div>
 
               {/* 🔗 Image path */}
