@@ -3,6 +3,7 @@ import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import Image from "next/dist/client/image";
 import { BiSolidTShirt } from "react-icons/bi";
+import { BiError } from "react-icons/bi";
 import { toast } from "react-toastify";
 import axios from "axios";
 import dayjs from "dayjs";
@@ -763,7 +764,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 className="px-2 py-1 rounded-md border text-white bg-purple-500 hover:bg-purple-600 text-xs inline-flex items-center gap-1"
                 title="Ticket"
               >
-                📋 Ticket
+                <BiError /> Ticket
               </button>
               
               {(() => {

@@ -32,81 +32,81 @@ export const siteSettings = {
         label: "sidebar-nav-item-dashboard",
         icon: "DashboardIcon",
       },
-      {
-        href: ROUTES.SHOPS,
-        label: "sidebar-nav-item-shops",
-        icon: "ShopIcon",
-      },
-      {
-        href: ROUTES.ADMIN_MY_SHOPS,
-        label: "sidebar-nav-item-my-shops",
-        icon: "MyShopIcon",
-      },
+      // {
+      //   href: ROUTES.SHOPS,
+      //   label: "sidebar-nav-item-shops",
+      //   icon: "ShopIcon",
+      // },
+      // {
+      //   href: ROUTES.ADMIN_MY_SHOPS,
+      //   label: "sidebar-nav-item-my-shops",
+      //   icon: "MyShopIcon",
+      // },
       {
         href: ROUTES.PRODUCTS,
         label: "sidebar-nav-item-products",
         icon: "ProductsIcon",
       },
-      {
-        href: ROUTES.ATTRIBUTES,
-        label: "sidebar-nav-item-attributes",
-        icon: "AttributeIcon",
-      },
-      {
-        href: ROUTES.BRANDS,
-        label: "sidebar-nav-item-groups",
-        icon: "TypesIcon",
-      },
-      {
-        href: ROUTES.CATEGORIES,
-        label: "sidebar-nav-item-categories",
-        icon: "CategoriesIcon",
-      },
-      {
-        href: ROUTES.TAGS,
-        label: "sidebar-nav-item-tags",
-        icon: "TagIcon",
-      },
+      // {
+      //   href: ROUTES.ATTRIBUTES,
+      //   label: "sidebar-nav-item-attributes",
+      //   icon: "AttributeIcon",
+      // },
+      // {
+      //   href: ROUTES.BRANDS,
+      //   label: "sidebar-nav-item-groups",
+      //   icon: "TypesIcon",
+      // },
+      // {
+      //   href: ROUTES.CATEGORIES,
+      //   label: "sidebar-nav-item-categories",
+      //   icon: "CategoriesIcon",
+      // },
+      // {
+      //   href: ROUTES.TAGS,
+      //   label: "sidebar-nav-item-tags",
+      //   icon: "TagIcon",
+      // },
       {
         href: ROUTES.ORDERS,
         label: "sidebar-nav-item-orders",
         icon: "OrdersIcon",
       },
-      {
-        href: ROUTES.ORDER_STATUS,
-        label: "sidebar-nav-item-order-status",
-        icon: "OrdersStatusIcon",
-      },
-      {
-        href: ROUTES.USERS,
-        label: "sidebar-nav-item-users",
-        icon: "UsersIcon",
-      },
-      {
-        href: ROUTES.COUPONS,
-        label: "sidebar-nav-item-coupons",
-        icon: "CouponsIcon",
-      },
-      {
-        href: ROUTES.TAXES,
-        label: "sidebar-nav-item-taxes",
-        icon: "TaxesIcon",
-      },
-      {
-        href: ROUTES.SHIPPINGS,
-        label: "sidebar-nav-item-shippings",
-        icon: "ShippingsIcon",
-      },
-      {
-        href: ROUTES.WITHDRAWS,
-        label: "sidebar-nav-item-withdraws",
-        icon: "WithdrawIcon",
-      },
-      {
-        href: ROUTES.SETTINGS,
-        label: "sidebar-nav-item-settings",
-        icon: "SettingsIcon",
-      },
+      // {
+      //   href: ROUTES.ORDER_STATUS,
+      //   label: "sidebar-nav-item-order-status",
+      //   icon: "OrdersStatusIcon",
+      // },
+      // {
+      //   href: ROUTES.USERS,
+      //   label: "sidebar-nav-item-users",
+      //   icon: "UsersIcon",
+      // },
+      // {
+      //   href: ROUTES.COUPONS,
+      //   label: "sidebar-nav-item-coupons",
+      //   icon: "CouponsIcon",
+      // },
+      // {
+      //   href: ROUTES.TAXES,
+      //   label: "sidebar-nav-item-taxes",
+      //   icon: "TaxesIcon",
+      // },
+      // {
+      //   href: ROUTES.SHIPPINGS,
+      //   label: "sidebar-nav-item-shippings",
+      //   icon: "ShippingsIcon",
+      // },
+      // {
+      //   href: ROUTES.WITHDRAWS,
+      //   label: "sidebar-nav-item-withdraws",
+      //   icon: "WithdrawIcon",
+      // },
+      // {
+      //   href: ROUTES.SETTINGS,
+      //   label: "sidebar-nav-item-settings",
+      //   icon: "SettingsIcon",
+      // },
     ],
     shop: [
       {
