@@ -1,0 +1,32 @@
+# -------------------------
+# Normalize line endings across OS
+# -------------------------
+* text=auto eol=lf
+
+# Explicitly define for known file types
+*.js     text eol=lf
+*.ts     text eol=lf
+*.tsx    text eol=lf
+*.jsx    text eol=lf
+*.json   text eol=lf
+*.yml    text eol=lf
+*.yaml   text eol=lf
+*.css    text eol=lf
+*.scss   text eol=lf
+*.html   text eol=lf
+*.md     text eol=lf
+*.sh     text eol=lf
+*.php    text eol=lf
+*.py     text eol=lf
+
+# Keep binaries untouched
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.pdf    binary
+*.zip    binary
+*.woff*  binary
+*.ttf    binary
+*.eot    binary

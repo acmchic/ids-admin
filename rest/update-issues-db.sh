@@ -96,3 +96,4 @@ mysql -h${DB_HOST} -P${DB_PORT} -u${DB_USER} -p${DB_PASSWORD} -D${DB_NAME} -e "S
 echo ""
 echo "✅ Done!"
 
+

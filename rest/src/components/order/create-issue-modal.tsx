@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Modal from "@components/ui/modal/modal";
 import { toast } from "react-toastify";
 import axios from "axios";
@@ -17,6 +17,7 @@ const ISSUE_TYPES = [
   { value: "new", label: "New" },
   { value: "change_shipping_address", label: "Đổi Shipping address" },
   { value: "change_variation", label: "Change Size / Màu / Vị trí" },
+  { value: "reset_upscayl", label: "Reset Upscayl" },
   { value: "replace", label: "Replace" },
   { value: "merge_order", label: "Gộp Đơn" },
   { value: "refund", label: "Refund" },
@@ -54,6 +55,11 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
   // Existing issues for this order
   const [existingIssues, setExistingIssues] = useState<any[]>([]);
   const [openIssue, setOpenIssue] = useState<any>(null);
+
+  const upscaylItems = useMemo(() => {
+    if (!orderDetails?.order_product) return [];
+    return orderDetails.order_product.filter((product: any) => Boolean(product.upscayl_image));
+  }, [orderDetails]);
 
   // Load order details and existing issues when modal opens
   useEffect(() => {
@@ -225,6 +231,16 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
         payload.old_data = { payment_status: paymentStatus };
         payload.new_data = { payment_status: null };
+      }
+
+      if (issueType === "reset_upscayl") {
+        payload.old_data = {
+          upscayl_images: upscaylItems.map((item: any) => ({
+            order_product_id: item.id,
+            product_id: item.product_id,
+            upscayl_image: item.upscayl_image,
+          })),
+        };
       }
 
       const issueResponse = await fetch(`${ISSUE_API_BASE}/issues`, {
@@ -435,6 +451,43 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
         if (!updateResult.success) {
           throw new Error(updateResult.error || "Failed to update variation");
         }
+      } else if (issueType === "reset_upscayl") {
+        if (!order?.id) {
+          toast.error("Không tìm thấy order id");
+          setLoading(false);
+          return;
+        }
+
+        oldData = {
+          upscayl_images: upscaylItems.map((item: any) => ({
+            order_product_id: item.id,
+            product_id: item.product_id,
+            upscayl_image: item.upscayl_image,
+          })),
+        };
+
+        const updateResponse = await fetch(`${ISSUE_API_BASE}/api/orders/reset-upscayl`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.id,
+          }),
+        });
+
+        const updateResult = await updateResponse.json().catch(() => null);
+        if (!updateResponse.ok || !updateResult?.success) {
+          const message =
+            updateResult?.error ||
+            updateResult?.message ||
+            (updateResult?.errors ? JSON.stringify(updateResult.errors) : undefined) ||
+            `HTTP ${updateResponse.status}: Failed to reset upscayl image`;
+          throw new Error(message);
+        }
+
+        newData = {
+          reset_count: updateResult.updated ?? 0,
+          cleared: updateResult.cleared ?? [],
+        };
       } else if (issueType === "replace") {
         if (!replaceFulfillMethod) {
           toast.error("Vui lòng chọn phương thức fulfill");
@@ -668,6 +721,33 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
       </div>
     );
   };
+
+  const renderResetUpscaylInfo = () => (
+    <div className="space-y-3">
+      <div className="p-3 bg-red-50 border border-red-200 rounded text-sm text-red-800">
+        <p className="font-semibold">Reset Upscayl Artwork</p>
+        <p>Thao tác này sẽ xoá toàn bộ đường dẫn upscayl hiện có của các sản phẩm trong đơn.</p>
+      </div>
+      {upscaylItems.length > 0 ? (
+        <div className="max-h-48 overflow-y-auto border rounded p-3 space-y-2 bg-white">
+          {upscaylItems.map((item: any) => (
+            <div key={item.id} className="text-sm text-gray-700">
+              <p>
+                <strong>Product:</strong> #{item.product_id || item.id}
+              </p>
+              <p className="truncate text-gray-500">
+                <strong>Upscayl:</strong> {item.upscayl_image}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="p-3 bg-gray-100 border border-gray-200 rounded text-sm text-gray-600">
+          Không tìm thấy ảnh upscayl nào cho đơn hàng này.
+        </div>
+      )}
+    </div>
+  );
 
   const handleValidateMerge = async (orderId: string) => {
     if (!orderId) {
@@ -926,6 +1006,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
               {issueType === "change_shipping_address" && renderJsonEditor("Địa Chỉ Giao Hàng")}
               {issueType === "change_variation" && renderVariationForm()}
+              {issueType === "reset_upscayl" && renderResetUpscaylInfo()}
               {issueType === "replace" && renderReplaceForm()}
               {issueType === "merge_order" && renderMergeForm()}
 

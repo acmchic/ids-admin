@@ -24,3 +24,4 @@ db.getConnection()
         console.error('❌ MySQL connection failed:', error.message);
     });
 
+
