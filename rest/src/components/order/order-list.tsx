@@ -839,7 +839,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         };
 
         const orderCount = record.order_count || 1;
-        const orderLabel = orderCount === 1 ? "" : `${orderCount}th Order`;
+        const orderLabel = orderCount === 1 ? "" : `Đã mua ${orderCount} lần`;
 
         const isFailed = isFailedOrder(record.order_num);
         
