@@ -1272,7 +1272,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         }
 
         const uploadKey = firstProduct ? `${firstProduct.id}-image-total` : undefined;
-        const imagePath = displayImgUrl ? getImagePathForUpload(displayImgUrl) : "";
+        const originalLink = firstProduct ? buildRegularProductImageUrls(firstProduct).link || displayImgUrl : displayImgUrl;
+        const imagePath = originalLink ? getImagePathForUpload(originalLink) : "";
         const fileName = displayImgUrl ? displayImgUrl.split("/").pop() || "unknown" : "unknown";
         const isUploading = uploadKey ? Boolean(uploadingImages[uploadKey]) : false;
 
