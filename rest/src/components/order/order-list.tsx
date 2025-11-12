@@ -682,7 +682,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "id",
       key: "select",
       align: "center",
-      width: 200,
+      width: 150,
       render: (_: any, row: any) => {
         const hasClassicTee = row.products?.some((product: any) => {
           const variant = (typeof product.pivot?.variation === 'string') 
@@ -839,8 +839,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         };
 
         const orderCount = record.order_count || 1;
-        const orderLabel = orderCount === 1 ? "" : `Đã mua ${orderCount} lần`;
-
         const isFailed = isFailedOrder(record.order_num);
         
         // Type assertion for shipping_address fields
@@ -894,7 +892,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-600 pt-1">{orderLabel}</p>
 
               {shippingMethod === "express" && (
                 <p className="text-xs text-red-600 pt-6 font-semibold uppercase">Express Shipping</p>
@@ -1099,7 +1096,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   dataIndex: "products",
   key: "products",
   align: "center",
-  width: 200,
+  width: 300,
   render: (products: any[]) => {
     const API_URL = getApiUrl();
 
@@ -1336,16 +1333,26 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       className: "cursor-pointer",
       dataIndex: "created_at",
       key: "created_at",
-      align: "center",
+      align: "left",
       onHeaderCell: () => onHeaderClick("created_at"),
-      render: (date: string) => {
+      render: (date: string, record: any) => {
         dayjs.extend(relativeTime);
         dayjs.extend(utc);
         dayjs.extend(timezone);
+        const orderCount = record.order_count || 1;
+        const isRepeatCustomer = orderCount > 1;
         return (
-          <span className="whitespace-nowrap">
-            {dayjs.utc(date).tz(dayjs.tz.guess()).fromNow()}
-          </span>
+          <div className="flex flex-col items-center gap-5">
+            {isRepeatCustomer && (
+              <span className="whitespace-nowrap font-semibold"  style={{ color: "red" }}>
+                Đã mua {orderCount} lần
+              </span>
+            )}
+            <span className="whitespace-nowrap">
+              {dayjs.utc(date).tz(dayjs.tz.guess()).fromNow()}
+            </span>
+            
+          </div>
         );
       },
     },
@@ -1407,7 +1414,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "tracking_number",
       key: "tracking",
       align: "center",
-      width: 400,
+      width: 150,
       render: (_: any, row: any) => {
         const trackingNumber = row.tracking_number || "No Tracking";
         const trackingUrl = row.tracking_url || "";
@@ -1436,7 +1443,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       dataIndex: "id",
       key: "actions",
       align: "center",
-      width: 200,
+      width: 150,
       render: (id: string, _: string, row: any) => {
         if (!id) return null;
 
