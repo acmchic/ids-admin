@@ -137,12 +137,153 @@ const parseVariation = (variation: any) => {
   return variation;
 };
 
+const parseImageData = (imgData: any) => {
+  if (!imgData) return null;
+  if (typeof imgData === "string") {
+    try {
+      return JSON.parse(imgData);
+    } catch (error) {
+      return null;
+    }
+  }
+  return imgData;
+};
+
+const buildCustomizeImageUrl = (product: any, apiUrl: string): string | null => {
+  const images = parseImageData(product?.image);
+  if (images?.[0]?.original) {
+    return `${apiUrl}/images/${images[0].original}`;
+  }
+  return null;
+};
+
+const buildRegularProductImageUrls = (product: any): { display: string; link: string } => {
+  const baseUrl = product?.img_url || product?.pivot?.img_url || "";
+  if (!baseUrl) return { display: "", link: "" };
+
+  const variation = parseVariation(product?.pivot?.variation || product?.variation);
+  const colorSlug = colorToSlug(variation?.color);
+
+  return {
+    display: convertToAtworkUrl(baseUrl, colorSlug),
+    link: baseUrl,
+  };
+};
+
+const getFolderPath = (url?: string): string => {
+  if (!url) return "CUSTOMIZE";
+  if (url.includes("/images/")) {
+    return url.split("/images/")[1]?.split("/").slice(0, 2).join("/") || "N/A";
+  }
+  if (url.includes("/media/")) {
+    const parts = url.split("/media/")[1]?.split("/") || [];
+    return parts.slice(3, 5).join("/") || "N/A";
+  }
+  return "N/A";
+};
+
+const getImagePathForUpload = (url: string): string => {
+  const parts = url.split("/");
+  const imagesIndex = parts.indexOf("images");
+  return imagesIndex !== -1 ? parts.slice(imagesIndex + 1, -1).join("/") : "custom";
+};
+
 // Function to get original artwork URL from pivot.img_url
 const getOriginalArtworkUrl = (pivotImgUrl: string): string => {
   // pivotImgUrl is usually the original artwork URL like:
   // https://api.idreamshirt.com/images/ids/gmc/the-kakashi-andamp;amp;amp;-pakkun-show_bb5.png
   // Just return it directly
   return pivotImgUrl;
+};
+
+const applyUpcasedColor = (color?: string) => color?.toUpperCase();
+
+const formatCurrency = (value: number) => value?.toFixed(2);
+
+const countByStatus = (orders: any[] | undefined, statusId: number) =>
+  orders?.filter((order) => Number(order.status?.id) === statusId).length ?? 0;
+
+const countInStatuses = (orders: any[] | undefined, ids: number[]) =>
+  orders?.filter((order) => ids.includes(Number(order.status?.id))).length ?? 0;
+
+const buildProductImageUrls = (product: any, apiUrl: string) => {
+  const customizeUrl = buildCustomizeImageUrl(product, apiUrl);
+  if (customizeUrl) {
+    return {
+      display: customizeUrl,
+      link: customizeUrl,
+      isCustomize: true,
+    };
+  }
+
+  const regular = buildRegularProductImageUrls(product);
+  return {
+    display: regular.display,
+    link: regular.link,
+    isCustomize: false,
+  };
+};
+
+const hasOrderError = (order: any, failedOrders: any[]) =>
+  order?.status?.id === 78 || failedOrders.some((failed) => failed.order_id === order.order_num);
+
+const formatIssueNoteTags = (notes?: string | null) => {
+  if (!notes) return [];
+  return notes.split("|").map((note) => note.trim()).filter(Boolean);
+};
+
+const getPresetLabel = (value: string) =>
+  NEW_ISSUE_PRESETS.find((preset) => preset.value === value)?.label || value;
+
+const composeNewIssueNote = (selectedTags: string[], otherNote: string) => {
+  const formatted: string[] = [];
+
+  selectedTags.forEach((tag) => {
+    if (tag === "other") {
+      return;
+    }
+    formatted.push(getPresetLabel(tag));
+  });
+
+  if (selectedTags.includes("other")) {
+    const trimmed = otherNote.trim();
+    if (!trimmed) {
+      throw new Error("Vui lòng nhập ghi chú cho mục Other");
+    }
+    formatted.push(trimmed);
+  }
+
+  return formatted.join(" | ");
+};
+
+const getDefaultNewIssueTags = (notes?: string | null) => {
+  if (!notes) {
+    return { selections: [] as string[], otherNote: "" };
+  }
+
+  const parts = notes.split("|").map((part) => part.trim()).filter(Boolean);
+
+  const selections: string[] = [];
+  let otherNote = "";
+
+  parts.forEach((part) => {
+    const preset = NEW_ISSUE_PRESETS.find((item) => item.label === part);
+    if (preset) {
+      if (preset.value === "other") {
+        selections.push("other");
+      } else {
+        selections.push(preset.value);
+      }
+    } else {
+      otherNote = otherNote ? `${otherNote} ${part}` : part;
+    }
+  });
+
+  if (otherNote && !selections.includes("other")) {
+    selections.push("other");
+  }
+
+  return { selections, otherNote };
 };
 
 
@@ -1052,11 +1193,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             );
           }
 
-          const uploadKey = `${product.id}-image`;
-          const isUploading = uploadingImages[uploadKey];
-          const imagePath = getImagePathForUpload(displayImgUrl);
-          const fileName = displayImgUrl.split("/").pop() || "unknown";
-
           return (
             <div
               key={`${product.id}-${index}`}
@@ -1085,30 +1221,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                     priority={false}
                   />
                 </a>
-              </div>
-
-
-              <div className="mt-2 flex justify-center">
-                <input
-                  ref={(el) => (fileInputRefs.current[uploadKey] = el)}
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => handleImageUpload(e, product.id.toString(), imagePath, fileName)}
-                  className="hidden"
-                />
-                <Button
-                  onClick={() => fileInputRefs.current[uploadKey]?.click()}
-                  disabled={isUploading}
-                  loading={isUploading}
-                  variant="outline"
-                  size="small"
-                  className={`gap-2 text-white shadow-md hover:shadow-lg focus:shadow-none ${
-                    isCustomizeProduct ? "bg-pink-600 hover:bg-pink-700" : "bg-black hover:bg-blue-700"
-                  }`}
-                >
-                  <UploadCloud className="h-4 w-4" />
-                  <span>{isUploading ? "Uploading..." : ""}</span>
-                </Button>
               </div>
 
               {/* 🔗 Image path */}
@@ -1149,14 +1261,63 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       onHeaderCell: () => onHeaderClick("total"),
       render: (total: number, record: any) => {
         const discount = record.discount || 0;
+        const firstProduct = record.products?.[0];
+        let displayImgUrl = "";
+
+        if (firstProduct) {
+          const customizeUrl = buildCustomizeImageUrl(firstProduct, getApiUrl());
+          if (customizeUrl) {
+            displayImgUrl = customizeUrl;
+          } else {
+            displayImgUrl = buildRegularProductImageUrls(firstProduct).display;
+          }
+        }
+
+        const uploadKey = firstProduct ? `${firstProduct.id}-image-total` : undefined;
+        const imagePath = displayImgUrl ? getImagePathForUpload(displayImgUrl) : "";
+        const fileName = displayImgUrl ? displayImgUrl.split("/").pop() || "unknown" : "unknown";
+        const isUploading = uploadKey ? Boolean(uploadingImages[uploadKey]) : false;
+
+        const handleClickUpload = () => {
+          if (!firstProduct || !uploadKey) return;
+          const proxyKey = `${firstProduct.id}-image`;
+          if (fileInputRefs.current[proxyKey]) {
+            fileInputRefs.current[proxyKey]?.click();
+            return;
+          }
+
+          const input = document.createElement("input");
+          input.type = "file";
+          input.accept = "image/*";
+          input.onchange = (event) => {
+            handleImageUpload(event as any, firstProduct.id.toString(), imagePath, fileName);
+            document.body.removeChild(input);
+          };
+          document.body.appendChild(input);
+          input.click();
+        };
 
         return (
-          <span>
-            {total.toFixed(2)}
-            {discount > 0 && (
-              <span className="text-red-500"> ({discount.toFixed(2)})</span>
+          <div className="flex flex-col items-center gap-2">
+            <span>
+              {total.toFixed(2)}
+              {discount > 0 && (
+                <span className="text-red-500"> ({discount.toFixed(2)})</span>
+              )}
+            </span>
+            {displayImgUrl && (
+              <Button
+                onClick={handleClickUpload}
+                disabled={isUploading}
+                loading={isUploading}
+                variant="outline"
+                size="small"
+              >
+                <UploadCloud className="h-4 w-4" />
+                <span>{isUploading ? "Uploading..." : ""}</span>
+              </Button>
             )}
-          </span>
+          </div>
         );
       },
     },

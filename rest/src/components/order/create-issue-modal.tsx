@@ -231,7 +231,7 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
             setSelectedNewIssueTags(parsed.selections);
             setNotes(parsed.otherNote || "");
           } else {
-            setNotes(open.notes || "");
+          setNotes(open.notes || "");
           }
           
           // Load old_data into JSON editor if available
