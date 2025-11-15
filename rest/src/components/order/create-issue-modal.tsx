@@ -442,6 +442,8 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
 
   // Resolve issue (update data + change status to resolved)
   const handleResolve = async () => {
+    console.log("🚀 handleResolve called - issueType:", issueType);
+    
     if (!issueType) {
       toast.error("Vui lòng chọn Issue");
       return;
@@ -462,6 +464,8 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
     try {
       let oldData = null;
       let newData = null;
+
+      console.log("🔍 Before switch - issueType:", issueType, "Type:", typeof issueType);
 
       // Handle different issue types
       if (issueType === "change_shipping_address") {
@@ -697,14 +701,23 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           newTotal: mergeResult.newTotal,
         };
       } else if (issueType === "refund") {
+        console.log("🔍 REFUND CASE - issueType:", issueType);
+        console.log("🔍 orderDetails:", orderDetails);
+        console.log("🔍 order:", order);
+        
         // Get current payment status
         const currentPaymentStatus = 
           orderDetails?.payment_status ?? 
           order?.payment_status ?? 
           null;
 
+        console.log("🔍 currentPaymentStatus:", currentPaymentStatus);
+        
         oldData = { payment_status: currentPaymentStatus };
         newData = { payment_status: null };
+
+        console.log("🔍 oldData:", oldData);
+        console.log("🔍 newData:", newData);
 
         // Update payment_status to null - gọi đến Laravel API
         const refundResponse = await fetch(`https://orders.idreamshirt.com/api/orders/update-payment-status`, {
@@ -726,6 +739,8 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           throw new Error(refundResult.error || "Failed to update payment status");
         }
       }
+
+      console.log("🔍 After all cases - oldData:", oldData, "newData:", newData);
 
       // If there's an existing open issue, update it; otherwise create new one
       if (openIssue) {
