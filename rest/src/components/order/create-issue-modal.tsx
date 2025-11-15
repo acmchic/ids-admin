@@ -326,7 +326,33 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           null;
 
         payload.old_data = { payment_status: paymentStatus };
-        payload.new_data = { payment_status: null };
+        payload.new_data = { payment_status: 'Refund' };
+
+        // Cập nhật payment_status về null ngay khi tạo ticket refund
+        try {
+          const refundResponse = await fetch(`https://orders.idreamshirt.com/api/orders/update-payment-status`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              order_id: order.id,
+              payment_status: null,
+            }),
+          });
+
+          if (!refundResponse.ok) {
+            const errorData = await refundResponse.json().catch(() => ({ error: "HTTP error" }));
+            throw new Error(errorData.error || `HTTP ${refundResponse.status}: Failed to update payment status`);
+          }
+
+          const refundResult = await refundResponse.json();
+          if (!refundResult.success) {
+            throw new Error(refundResult.error || "Failed to update payment status");
+          }
+        } catch (error: any) {
+          toast.error(error.message || "Không thể cập nhật payment status");
+          setLoading(false);
+          return;
+        }
       }
 
       if (issueType === "reset_upscayl") {
@@ -670,6 +696,35 @@ const CreateIssueModal: React.FC<CreateIssueModalProps> = ({
           mergedOrderId: order.id,
           newTotal: mergeResult.newTotal,
         };
+      } else if (issueType === "refund") {
+        // Get current payment status
+        const currentPaymentStatus = 
+          orderDetails?.payment_status ?? 
+          order?.payment_status ?? 
+          null;
+
+        oldData = { payment_status: currentPaymentStatus };
+        newData = { payment_status: null };
+
+        // Update payment_status to null - gọi đến Laravel API
+        const refundResponse = await fetch(`https://orders.idreamshirt.com/api/orders/update-payment-status`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            order_id: order.id,
+            payment_status: null,
+          }),
+        });
+
+        if (!refundResponse.ok) {
+          const errorData = await refundResponse.json().catch(() => ({ error: "HTTP error" }));
+          throw new Error(errorData.error || `HTTP ${refundResponse.status}: Failed to update payment status`);
+        }
+
+        const refundResult = await refundResponse.json();
+        if (!refundResult.success) {
+          throw new Error(refundResult.error || "Failed to update payment status");
+        }
       }
 
       // If there's an existing open issue, update it; otherwise create new one
