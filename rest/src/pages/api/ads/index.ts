@@ -2,7 +2,11 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import fs from 'fs';
 import path from 'path';
 
-const ADS_DATA_FILE = path.join(process.cwd(), 'data', 'ads-tracking.json');
+// Use /tmp directory on server for write access
+const DATA_DIR = process.env.NODE_ENV === 'production' 
+  ? '/tmp/ads-data'
+  : path.join(process.cwd(), 'data');
+const ADS_DATA_FILE = path.join(DATA_DIR, 'ads-tracking.json');
 
 interface AdsEntry {
   id: string;
@@ -19,9 +23,14 @@ interface AdsData {
 
 // Ensure data directory exists
 function ensureDataDir() {
-  const dataDir = path.dirname(ADS_DATA_FILE);
-  if (!fs.existsSync(dataDir)) {
-    fs.mkdirSync(dataDir, { recursive: true });
+  try {
+    if (!fs.existsSync(DATA_DIR)) {
+      fs.mkdirSync(DATA_DIR, { recursive: true, mode: 0o755 });
+      console.log(`[Ads API] Created directory: ${DATA_DIR}`);
+    }
+  } catch (error: any) {
+    console.error(`[Ads API] Failed to create directory: ${error.message}`);
+    throw error;
   }
 }
 
@@ -74,7 +83,8 @@ export default async function handler(
 ) {
   try {
     // Log request for debugging
-    console.log(`[Ads API] ${req.method} request received`);
+    console.log(`[Ads API] ${req.method} request received - Data file: ${ADS_DATA_FILE}`);
+    console.log(`[Ads API] Environment: ${process.env.NODE_ENV}`);
     
     if (req.method === 'GET') {
       // Get all ads entries
