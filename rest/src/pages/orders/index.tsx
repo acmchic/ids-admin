@@ -15,6 +15,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { format } from "date-fns";
 import { ClipboardCopy } from "lucide-react";
 import { toast } from "react-toastify";
+import AdsDialog from "@components/ads/ads-dialog";
 
 type OrderFilters = {
   text: string;
@@ -36,6 +37,7 @@ export default function Orders() {
   const [filters, setFilters] = useState<OrderFilters>({ text: "", date: undefined, status: undefined, status_in: undefined });
   const [isTodayFilter, setIsTodayFilter] = useState(false);
   const [isYesterdayFilter, setIsYesterdayFilter] = useState(false);
+  const [showAdsDialog, setShowAdsDialog] = useState(false);
 
   const { data, isLoading, error, isFetching } = useOrdersQuery({
     limit,
@@ -207,6 +209,8 @@ export default function Orders() {
 
   return (
     <>
+      <AdsDialog open={showAdsDialog} onClose={() => setShowAdsDialog(false)} />
+      
       <Card className="flex flex-col gap-4 mb-8 p-4">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <h1 className="text-lg font-semibold text-heading">{t("form:input-label-orders")}</h1>
@@ -223,6 +227,13 @@ export default function Orders() {
     className="px-3 py-1 bg-purple-500 text-white rounded hover:bg-purple-600"
   >
     Yesterday
+  </button>
+
+  <button
+    onClick={() => setShowAdsDialog(true)}
+    className="px-3 py-1 bg-green-500 text-white rounded hover:bg-green-600"
+  >
+    Ads
   </button>
   
 </div>
