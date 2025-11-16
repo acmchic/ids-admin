@@ -27,22 +27,45 @@ function ensureDataDir() {
 
 // Read ads data from file
 function readAdsData(): AdsData {
-  ensureDataDir();
-  
-  if (!fs.existsSync(ADS_DATA_FILE)) {
-    const initialData: AdsData = { entries: [], totalDebt: 0 };
-    fs.writeFileSync(ADS_DATA_FILE, JSON.stringify(initialData, null, 2));
-    return initialData;
+  try {
+    ensureDataDir();
+    
+    if (!fs.existsSync(ADS_DATA_FILE)) {
+      const initialData: AdsData = { entries: [], totalDebt: 0 };
+      fs.writeFileSync(ADS_DATA_FILE, JSON.stringify(initialData, null, 2), 'utf-8');
+      return initialData;
+    }
+    
+    const fileContent = fs.readFileSync(ADS_DATA_FILE, 'utf-8');
+    const data = JSON.parse(fileContent);
+    
+    // Validate data structure
+    if (!data.entries || !Array.isArray(data.entries)) {
+      console.warn('[Ads API] Invalid data structure, resetting to default');
+      const defaultData: AdsData = { entries: [], totalDebt: data.totalDebt || 0 };
+      writeAdsData(defaultData);
+      return defaultData;
+    }
+    
+    return data;
+  } catch (error: any) {
+    console.error('[Ads API] Error reading data file:', error);
+    // Return default data if file is corrupted
+    return { entries: [], totalDebt: 0 };
   }
-  
-  const fileContent = fs.readFileSync(ADS_DATA_FILE, 'utf-8');
-  return JSON.parse(fileContent);
 }
 
 // Write ads data to file
 function writeAdsData(data: AdsData) {
-  ensureDataDir();
-  fs.writeFileSync(ADS_DATA_FILE, JSON.stringify(data, null, 2));
+  try {
+    ensureDataDir();
+    const jsonString = JSON.stringify(data, null, 2);
+    fs.writeFileSync(ADS_DATA_FILE, jsonString, 'utf-8');
+    console.log('[Ads API] Data written successfully');
+  } catch (error: any) {
+    console.error('[Ads API] Error writing data file:', error);
+    throw new Error(`Failed to write data: ${error.message}`);
+  }
 }
 
 export default async function handler(
@@ -50,9 +73,13 @@ export default async function handler(
   res: NextApiResponse
 ) {
   try {
+    // Log request for debugging
+    console.log(`[Ads API] ${req.method} request received`);
+    
     if (req.method === 'GET') {
       // Get all ads entries
       const data = readAdsData();
+      console.log(`[Ads API] GET - Returning ${data.entries.length} entries, debt: ${data.totalDebt}`);
       return res.status(200).json(data);
     }
     
@@ -65,18 +92,24 @@ export default async function handler(
       }
       
       const data = readAdsData();
+      const amountValue = parseFloat(amount);
+      
       const newEntry: AdsEntry = {
         id: Date.now().toString(),
-        amount: parseFloat(amount),
+        amount: amountValue,
         date,
         note: note || '',
         createdAt: new Date().toISOString(),
       };
       
       data.entries.unshift(newEntry); // Add to beginning
+      
+      // Tự động cộng vào totalDebt
+      data.totalDebt = (data.totalDebt || 0) + amountValue;
+      
       writeAdsData(data);
       
-      return res.status(201).json(newEntry);
+      return res.status(201).json({ entry: newEntry, totalDebt: data.totalDebt });
     }
     
     if (req.method === 'PUT') {
@@ -128,9 +161,13 @@ export default async function handler(
     }
     
     return res.status(405).json({ error: 'Method not allowed' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Ads API error:', error);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ 
+      error: 'Internal server error',
+      message: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 }
 

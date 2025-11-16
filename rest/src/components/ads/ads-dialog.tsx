@@ -38,19 +38,38 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
   // Load data when dialog opens
   useEffect(() => {
     if (open) {
+      setLoading(true);
       loadAdsData();
     }
   }, [open]);
 
   const loadAdsData = async () => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    
     try {
-      const response = await fetch("/api/ads");
+      const response = await fetch("/api/ads", {
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to load');
+      }
       const data = await response.json();
       setAdsData(data);
-      setDebtAmount(data.totalDebt.toString());
-    } catch (error) {
+      setDebtAmount(data.totalDebt?.toString() || "0");
+    } catch (error: any) {
+      clearTimeout(timeoutId);
       console.error("Failed to load ads data:", error);
-      toast.error("Không thể tải dữ liệu");
+      if (error.name === 'AbortError') {
+        toast.error("Request timeout - please try again");
+      } else {
+        toast.error(`Failed to load data: ${error.message}`);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -58,7 +77,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
     e.preventDefault();
     
     if (!amount || !date) {
-      toast.error("Vui lòng nhập đủ thông tin");
+      toast.error("Please fill in all required fields");
       return;
     }
 
@@ -80,18 +99,19 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
       });
 
       if (response.ok) {
-        toast.success(editingId ? "Đã cập nhật" : "Đã thêm mới");
+        toast.success(editingId ? "Updated successfully" : "Added and balance updated");
         setAmount("");
         setDate(format(new Date(), "yyyy-MM-dd"));
         setNote("");
         setEditingId(null);
         await loadAdsData();
       } else {
-        toast.error("Có lỗi xảy ra");
+        const errorData = await response.json();
+        toast.error(`Error: ${errorData.message || errorData.error}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save:", error);
-      toast.error("Có lỗi xảy ra");
+      toast.error(`Error: ${error.message}`);
     } finally {
       setLoading(false);
     }
@@ -112,7 +132,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm("Bạn có chắc muốn xóa?")) return;
+    if (!confirm("Are you sure you want to delete this entry?")) return;
     
     try {
       const response = await fetch(`/api/ads?id=${id}`, {
@@ -120,14 +140,14 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
       });
 
       if (response.ok) {
-        toast.success("Đã xóa");
+        toast.success("Deleted successfully");
         await loadAdsData();
       } else {
-        toast.error("Có lỗi xảy ra");
+        toast.error("Error deleting entry");
       }
     } catch (error) {
       console.error("Failed to delete:", error);
-      toast.error("Có lỗi xảy ra");
+      toast.error("Error deleting entry");
     }
   };
 
@@ -144,15 +164,15 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
       });
 
       if (response.ok) {
-        toast.success("Đã cập nhật số tiền nợ");
+        toast.success("Balance updated successfully");
         setEditingDebt(false);
         await loadAdsData();
       } else {
-        toast.error("Có lỗi xảy ra");
+        toast.error("Error updating balance");
       }
     } catch (error) {
       console.error("Failed to update debt:", error);
-      toast.error("Có lỗi xảy ra");
+      toast.error("Error updating balance");
     } finally {
       setLoading(false);
     }
@@ -168,7 +188,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
     <Modal open={open} onClose={onClose}>
       <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-4xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-2xl font-semibold">Quản lý Chi phí Quảng cáo</h2>
+          <h2 className="text-2xl font-semibold">Ads Spending Tracker</h2>
           <button
             onClick={onClose}
             className="text-gray-400 hover:text-gray-600 text-2xl"
@@ -177,56 +197,62 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
           </button>
         </div>
 
-        {/* Summary */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="text-sm text-blue-600 mb-1">Tổng tháng này</div>
-            <div className="text-2xl font-bold text-blue-700">
-              {monthlyTotal.toLocaleString("en-US", { minimumFractionDigits: 2 })}
-            </div>
+        {loading && adsData.entries.length === 0 && (
+          <div className="flex items-center justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <span className="ml-4 text-gray-600">Loading...</span>
           </div>
-          
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-sm text-red-600">Số tiền còn nợ</span>
+        )}
+
+        {!loading || adsData.entries.length > 0 ? (
+          <>
+        
+
+        {/* Summary */}
+        <div className="mb-6">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-base text-red-600 font-medium">Total Outstanding Balance</span>
               {!editingDebt && (
                 <button
                   onClick={() => setEditingDebt(true)}
-                  className="text-xs text-blue-600 hover:text-blue-700"
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                 >
-                  Sửa
+                  Edit
                 </button>
               )}
             </div>
             {editingDebt ? (
               <div className="flex items-center gap-2">
+                <span className="text-3xl font-bold text-red-700">$</span>
                 <input
                   type="number"
                   value={debtAmount}
                   onChange={(e) => setDebtAmount(e.target.value)}
-                  className="text-xl font-bold text-red-700 bg-white border border-red-300 rounded px-2 py-1 w-32"
+                  className="text-3xl font-bold text-red-700 bg-white border border-red-300 rounded px-3 py-2 w-48"
                   step="0.01"
+                  autoFocus
                 />
                 <button
                   onClick={handleUpdateDebt}
                   disabled={loading}
-                  className="text-xs px-2 py-1 bg-green-600 text-white rounded hover:bg-green-700"
+                  className="text-sm px-3 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
                 >
-                  Lưu
+                  Save
                 </button>
                 <button
                   onClick={() => {
                     setEditingDebt(false);
                     setDebtAmount(adsData.totalDebt.toString());
                   }}
-                  className="text-xs px-2 py-1 bg-gray-400 text-white rounded hover:bg-gray-500"
+                  className="text-sm px-3 py-2 bg-gray-400 text-white rounded hover:bg-gray-500"
                 >
-                  Hủy
+                  Cancel
                 </button>
               </div>
             ) : (
-              <div className="text-2xl font-bold text-red-700">
-                {parseFloat(debtAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}
+              <div className="text-3xl font-bold text-red-700">
+                ${parseFloat(debtAmount || "0").toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </div>
             )}
           </div>
@@ -235,11 +261,11 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
         {/* Add/Edit Form */}
         <form onSubmit={handleSubmit} className="bg-gray-50 rounded-lg p-4 mb-6">
           <h3 className="text-lg font-semibold mb-4">
-            {editingId ? "Chỉnh sửa" : "Thêm mới"}
+            {editingId ? "Edit Entry" : "Add New Entry"}
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <Input
-              label="Money"
+              label="Amount ($)"
               name="amount"
               type="number"
               step="0.01"
@@ -248,7 +274,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
               required
             />
             <Input
-              label="Ngày nạp"
+              label="Date"
               name="date"
               type="date"
               value={date}
@@ -256,7 +282,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
               required
             />
             <Input
-              label="Ghi chú"
+              label="Note"
               name="note"
               value={note}
               onChange={(e) => setNote(e.target.value)}
@@ -268,7 +294,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
               loading={loading}
               disabled={loading}
             >
-              {editingId ? "Cập nhật" : "Thêm"}
+              {editingId ? "Update" : "Add"}
             </Button>
             {editingId && (
               <button
@@ -276,7 +302,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
                 onClick={handleCancelEdit}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
               >
-                Hủy
+                Cancel
               </button>
             )}
           </div>
@@ -284,10 +310,10 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
 
         {/* Entries List */}
         <div>
-          <h3 className="text-lg font-semibold mb-4">Lịch sử nạp tiền</h3>
+          <h3 className="text-lg font-semibold mb-4">Payment History</h3>
           {adsData.entries.length === 0 ? (
             <div className="text-center text-gray-500 py-8">
-              Chưa có dữ liệu
+              No data yet
             </div>
           ) : (
             <div className="space-y-2 max-h-96 overflow-y-auto">
@@ -299,7 +325,7 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
                   <div className="flex-1">
                     <div className="flex items-center gap-4">
                       <span className="text-lg font-semibold text-green-600">
-                        {entry.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                        ${entry.amount.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                       </span>
                       <span className="text-sm text-gray-600">{entry.date}</span>
                       {entry.note && (
@@ -314,13 +340,13 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
                       onClick={() => handleEdit(entry)}
                       className="px-3 py-1 text-sm bg-blue-500 text-white rounded hover:bg-blue-600"
                     >
-                      Sửa
+                      Edit
                     </button>
                     <button
                       onClick={() => handleDelete(entry.id)}
                       className="px-3 py-1 text-sm bg-red-500 text-white rounded hover:bg-red-600"
                     >
-                      Xóa
+                      Delete
                     </button>
                   </div>
                 </div>
@@ -328,6 +354,8 @@ export default function AdsDialog({ open, onClose }: AdsDialogProps) {
             </div>
           )}
         </div>
+        </>
+        ) : null}
       </div>
     </Modal>
   );

@@ -25,7 +25,6 @@ import { UsState } from "../../utils/us-states";
 import { AlertTriangle, Search, UploadCloud } from "lucide-react";
 import { getApiUrl } from "../../config/api";
 import CreateIssueModal from "./create-issue-modal";
-import { validateZipcode } from "../../utils/zipcode-validator";
 import { determineAutoFulfillSelections } from "../../utils/orders/auto-fulfill-selection";
 
 import {
@@ -827,8 +826,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         const stateFullName = stateNames[provinceCode as keyof typeof stateNames] || provinceCode;
 
         // Validate zipcode
-        const zipcodeValidation = validateZipcode(zipcode, provinceCode);
-        const hasZipcodeError = zipcodeValidation.isSuspicious || !zipcodeValidation.isValid;
 
         const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
           `${street}, ${city}, ${zipcode}, ${stateFullName} (US)`
@@ -904,42 +901,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               )}
             </div>
 
-            <div className="flex items-center gap-2">
-              <Link
-                href={googleMapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={`hover:underline text-xs ${
-                  hasZipcodeError ? 'text-red-600 font-bold' : 'text-black'
-                }`}
-              >
-                {stateFullName} {zipcode && `(${zipcode})`}
-              </Link>
-              
-              {hasZipcodeError && (
-                <span 
-                  className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800 border border-red-300"
-                  title={zipcodeValidation.reason || 'Zipcode may be incorrect'}
-                >
-                  ⚠️ ZIP
-                </span>
-              )}
-            </div>
-            
-            {hasZipcodeError && zipcode && (
-              <div className="mt-1 p-2 bg-yellow-50 border border-yellow-300 rounded text-xs">
-                <p className="text-yellow-800 font-semibold">⚠️ Zipcode Warning:</p>
-                <p className="text-yellow-700">
-                  Current: <span className="font-mono">{zipcode}</span>
-                  {zipcodeValidation.suggestedZipcode && (
-                    <> - Suggested: <span className="font-mono font-bold">{zipcodeValidation.suggestedZipcode}</span></>
-                  )}
-                </p>
-                {zipcodeValidation.reason && (
-                  <p className="text-yellow-600 text-xs mt-1">{zipcodeValidation.reason}</p>
-                )}
-              </div>
-            )}
           </div>
         );
       },
