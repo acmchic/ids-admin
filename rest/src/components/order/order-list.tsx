@@ -324,6 +324,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     })
   }
   
+  // Function to check if order has open ticket
+  const hasOpenTicket = (orderId: string | number) => {
+    return allIssues.some((issue: any) => 
+      String(issue.order_id) === String(orderId) && issue.status === 'open'
+    );
+  }
+  
   
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const [selectedOrders, setSelectedOrders] = useState<Record<string, number>>({});
@@ -402,11 +409,15 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     return data;
   }, [showOpenIssues, issueStats.orderIds, data]);
 
-  // Function to select all G orders with status = 1
+  // Function to select all G orders with status = 1 (skip orders with open tickets)
   const handleSelectAllG = () => {
     const ordersWithStatus1 = data?.filter(order => {
-      return order.status?.id === 1;
+      return Number(order.status?.id) === 1 && !hasOpenTicket(order.id);
     }) || [];
+    
+    const skippedCount = data?.filter(order => 
+      Number(order.status?.id) === 1 && hasOpenTicket(order.id)
+    ).length || 0;
     
     const newSelections: Record<string, number> = {};
     ordersWithStatus1.forEach(order => {
@@ -416,13 +427,20 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     setSelectionSummary("");
     
     console.log(`✅ All G: Selected ${ordersWithStatus1.length} orders with status = 1`);
+    if (skippedCount > 0) {
+      toast.info(`Đã bỏ qua ${skippedCount} đơn có ticket đang open`);
+    }
   };
 
-  // Function to select all B orders with status = 1
+  // Function to select all B orders with status = 1 (skip orders with open tickets)
   const handleSelectAllB = () => {
     const ordersWithStatus1 = data?.filter(order => {
-      return order.status?.id === 1;
+      return Number(order.status?.id) === 1 && !hasOpenTicket(order.id);
     }) || [];
+    
+    const skippedCount = data?.filter(order => 
+      Number(order.status?.id) === 1 && hasOpenTicket(order.id)
+    ).length || 0;
     
     const newSelections: Record<string, number> = {};
     ordersWithStatus1.forEach(order => {
@@ -432,13 +450,22 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     setSelectionSummary("");
     
     console.log(`✅ All B: Selected ${ordersWithStatus1.length} orders with status = 1`);
+    if (skippedCount > 0) {
+      toast.info(`Đã bỏ qua ${skippedCount} đơn có ticket đang open`);
+    }
   };
 
-  // Function to select all M orders with status = 1 or 78
+  // Function to select all M orders with status = 1 or 78 (skip orders with open tickets)
   const handleSelectAllM = () => {
     const ordersWithStatus = data?.filter(order => {
-      return order.status?.id === 1 || order.status?.id === 78;
+      const statusId = Number(order.status?.id);
+      return (statusId === 1 || statusId === 78) && !hasOpenTicket(order.id);
     }) || [];
+    
+    const skippedCount = data?.filter(order => {
+      const statusId = Number(order.status?.id);
+      return (statusId === 1 || statusId === 78) && hasOpenTicket(order.id);
+    }).length || 0;
     
     const newSelections: Record<string, number> = {};
     ordersWithStatus.forEach(order => {
@@ -448,12 +475,27 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     setSelectionSummary("");
     
     console.log(`✅ All M: Selected ${ordersWithStatus.length} orders with status = 1 or 78`);
+    if (skippedCount > 0) {
+      toast.info(`Đã bỏ qua ${skippedCount} đơn có ticket đang open`);
+    }
   };
 
   const handleSelectAuto = () => {
-    const eligibleOrders = data?.filter(order => order.status?.id === 1 || order.status?.id === 78) || [];
+    const eligibleOrders = data?.filter(order => {
+      const statusId = Number(order.status?.id);
+      return (statusId === 1 || statusId === 78) && !hasOpenTicket(order.id);
+    }) || [];
+    
+    const skippedCount = data?.filter(order => {
+      const statusId = Number(order.status?.id);
+      return (statusId === 1 || statusId === 78) && hasOpenTicket(order.id);
+    }).length || 0;
+    
     if (eligibleOrders.length === 0) {
       toast.info("Không có đơn nào ở trạng thái 1 hoặc 78 để chọn.");
+      if (skippedCount > 0) {
+        toast.info(`Đã bỏ qua ${skippedCount} đơn có ticket đang open`);
+      }
       return;
     }
 
@@ -475,6 +517,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
     setSelectedOrders(normalized);
     setSelectionSummary(`Đã chọn ${eligibleOrders.length} đơn: Burger ${burgerCount}, Mango ${mangoCount}`);
+    if (skippedCount > 0) {
+      toast.info(`Đã bỏ qua ${skippedCount} đơn có ticket đang open`);
+    }
   };
 
   const onHeaderClick = (column: string | null) => ({
@@ -498,15 +543,33 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
     try {
       const grouped: Record<number, any[]> = {};
+      let skippedOrders: any[] = [];
+      
       data?.forEach(order => {
         const status = selectedOrders[order.id];
         if (status) {
+          // Skip orders with open tickets
+          if (hasOpenTicket(order.id)) {
+            skippedOrders.push(order);
+            return;
+          }
+          
           if (!grouped[status]) grouped[status] = [];
           grouped[status].push(order);
         }
       });
 
-      // Calculate total orders
+      // Show warning if some orders were skipped
+      if (skippedOrders.length > 0) {
+        const skippedNames = skippedOrders.map(o => 
+          o.shipping_address?.shipping_name || o.order_num || o.id
+        ).join(', ');
+        toast.warning(`⚠️ Đã bỏ qua ${skippedOrders.length} đơn có ticket đang open: ${skippedNames}`, {
+          autoClose: 5000
+        });
+      }
+
+      // Calculate total orders (excluding skipped)
       const totalOrders = Object.values(grouped).flat().length;
       
       // Initialize progress
@@ -692,45 +755,68 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           return variantName.includes("classic-t-shirt");
         });
 
+        const orderHasOpenTicket = hasOpenTicket(row.id);
+
         return (
           <div className="flex flex-col justify-center gap-2">
             {/* Row 1: Fulfill buttons */}
             <div className="flex flex-row justify-center gap-2">
               {/* G Button */}
               <button
-                onClick={() =>
-                  setSelectedOrders(prev => ({ ...prev, [row.id]: 2 }))
-                }
-                className={`px-3 py-2 rounded-md border text-white bg-blue-500 hover:bg-blue-600 text-sm ${selectedOrders[row.id] === 2
-                    ? 'ring-2 ring-offset-1 ring-blue-300'
-                    : ''
-                  }`}
+                onClick={() => {
+                  if (orderHasOpenTicket) {
+                    toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+                    return;
+                  }
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: 2 }));
+                }}
+                disabled={orderHasOpenTicket}
+                className={`px-3 py-2 rounded-md border text-white text-sm ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-blue-500 hover:bg-blue-600'
+                } ${selectedOrders[row.id] === 2 ? 'ring-2 ring-offset-1 ring-blue-300' : ''}`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 G
               </button>
               
               {/* B Button */}
               <button
-                onClick={() =>
-                  setSelectedOrders(prev => ({ ...prev, [row.id]: 9 }))
-                }
-                className={`px-3 py-2 rounded-md border text-white bg-red-500 hover:bg-red-600 text-sm ${selectedOrders[row.id] === 9
-                    ? 'ring-2 ring-offset-1 ring-red-300'
-                    : ''
-                  }`}
+                onClick={() => {
+                  if (orderHasOpenTicket) {
+                    toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+                    return;
+                  }
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: 9 }));
+                }}
+                disabled={orderHasOpenTicket}
+                className={`px-3 py-2 rounded-md border text-white text-sm ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-red-500 hover:bg-red-600'
+                } ${selectedOrders[row.id] === 9 ? 'ring-2 ring-offset-1 ring-red-300' : ''}`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 B
               </button>
               
               {/* M Button */}
               <button
-                onClick={() =>
-                  setSelectedOrders(prev => ({ ...prev, [row.id]: 69 }))
-                }
-                className={`px-3 py-2 rounded-md border text-white bg-green-500 hover:bg-green-600 text-sm ${selectedOrders[row.id] === 69
-                    ? 'ring-2 ring-offset-1 ring-green-300'
-                    : ''
-                  }`}
+                onClick={() => {
+                  if (orderHasOpenTicket) {
+                    toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+                    return;
+                  }
+                  setSelectedOrders(prev => ({ ...prev, [row.id]: 69 }));
+                }}
+                disabled={orderHasOpenTicket}
+                className={`px-3 py-2 rounded-md border text-white text-sm ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-green-500 hover:bg-green-600'
+                } ${selectedOrders[row.id] === 69 ? 'ring-2 ring-offset-1 ring-green-300' : ''}`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 M
               </button>
@@ -1336,14 +1422,15 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       onHeaderCell: () => onHeaderClick("status"),
       render: (status: OrderStatus) => {
         let additionalText = "";
+        const statusId = Number(status?.id);
 
-        if (status?.id == 2) additionalText = "(Mango)";
-        else if (status?.id == 9) additionalText = "(Burgerprint)";
-        else if (status?.id == 8) additionalText = "(Printway)";
-        else if (status?.id == 68) additionalText = "(Merchize)";
-        else if (status?.id == 69) additionalText = "(MangoPrint)";
+        if (statusId === 2) additionalText = "(Mango)";
+        else if (statusId === 9) additionalText = "(Burgerprint)";
+        else if (statusId === 8) additionalText = "(Printway)";
+        else if (statusId === 68) additionalText = "(Merchize)";
+        else if (statusId === 69) additionalText = "(MangoPrint)";
 
-        if (status?.id == 77) {
+        if (statusId === 77) {
           return (
             <span className="text-red-600 font-semibold flex items-center gap-1">
               <AlertTriangle size={16} className="text-red-500" />
@@ -1352,7 +1439,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           );
         }
 
-        if (status?.id == 78) {
+        if (statusId === 78) {
           return (
             <span className="text-red-600 font-semibold flex items-center gap-1">
               <AlertTriangle size={16} className="text-red-500" />
@@ -1410,7 +1497,14 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       render: (id: string, _: string, row: any) => {
         if (!id) return null;
 
+        const orderHasOpenTicket = hasOpenTicket(id);
+
         const handleFulfill = async () => {
+          if (orderHasOpenTicket) {
+            toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+            return;
+          }
+
           setLoadingRows((prev) => ({ ...prev, [id]: true }));
 
           try {
@@ -1424,6 +1518,11 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         };
 
         const handleBurger = async () => {
+          if (orderHasOpenTicket) {
+            toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+            return;
+          }
+
           setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: true }));
 
           try {
@@ -1436,6 +1535,11 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           }
         };
         const handleMerchize = async () => {
+          if (orderHasOpenTicket) {
+            toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+            return;
+          }
+
           setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: true }));
 
           try {
@@ -1449,6 +1553,11 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         };
 
         const handleMangoPrint = async () => {
+          if (orderHasOpenTicket) {
+            toast.error("⚠️ Cần resolved ticket trước khi fulfill");
+            return;
+          }
+
           setLoadingRows((prev) => ({ ...prev, [`mango-${id}`]: true }));
 
           try {
@@ -1486,8 +1595,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               {/* MangoPrint Button */}
               <button
                 onClick={handleMangoPrint}
-                disabled={loadingRows[`mango-${id}`]}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-600 hover:bg-green-700 transition font-semibold"
+                disabled={loadingRows[`mango-${id}`] || orderHasOpenTicket}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-white font-semibold transition ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-green-600 hover:bg-green-700'
+                }`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 {loadingRows[`mango-${id}`] ? (
                   <ClockLoader size={15} color="#fff" loading={loadingRows[`mango-${id}`]} />
@@ -1500,8 +1614,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               {/* Burger Button */}
               <button
                 onClick={handleBurger}
-                disabled={loadingRows[`burger-${id}`]}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-red-500 hover:bg-red-600 transition"
+                disabled={loadingRows[`burger-${id}`] || orderHasOpenTicket}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-red-500 hover:bg-red-600'
+                }`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 {loadingRows[`burger-${id}`] ? (
                   <ClockLoader size={15} color="#fff" loading={loadingRows[`burger-${id}`]} />
@@ -1514,8 +1633,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               {/* Merchize Button */}
               <button
                 onClick={handleMerchize}
-                disabled={loadingRows[`merchize-${id}`]}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-green-500 hover:bg-green-600 transition"
+                disabled={loadingRows[`merchize-${id}`] || orderHasOpenTicket}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-green-500 hover:bg-green-600'
+                }`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 {loadingRows[`merchize-${id}`] ? (
                   <ClockLoader size={15} color="#fff" loading={loadingRows[`merchize-${id}`]} />
@@ -1528,8 +1652,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               {/* Fulfill Button */}
               <button
                 onClick={handleFulfill}
-                disabled={loadingRows[id]}
-                className="flex items-center gap-1 px-2 py-1 rounded-md text-white bg-blue-500 hover:bg-blue-600 transition"
+                disabled={loadingRows[id] || orderHasOpenTicket}
+                className={`flex items-center gap-1 px-2 py-1 rounded-md text-white transition ${
+                  orderHasOpenTicket
+                    ? 'bg-gray-400 cursor-not-allowed opacity-50'
+                    : 'bg-blue-500 hover:bg-blue-600'
+                }`}
+                title={orderHasOpenTicket ? "Order có ticket đang open" : ""}
               >
                 {loadingRows[id] ? (
                   <ClockLoader size={15} color="#fff" loading={loadingRows[id]} />
@@ -1569,13 +1698,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             </div>
             <div className="text-xs text-red-600 flex items-center gap-2">
               <span>{failedOrdersLoading ? 'Refreshing...' : 'Manual refresh only'}</span>
-              <button
-                onClick={refetch}
-                disabled={failedOrdersLoading}
-                className="px-2 py-1 text-xs bg-red-500 text-white rounded hover:bg-red-600 disabled:opacity-50"
-              >
-                🔄 Refresh
-              </button>
             </div>
           </div>
         </div>
@@ -1708,8 +1830,8 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           expandable={{ expandIconColumnIndex: -1 }}
           rowClassName={(record) => {
             const isCustomize = isCustomizeOrder(record);
-            const isFailed = isFailedOrder(record.order_num);
-            const isFulfillFailed = record.status?.id === 78;
+            const isFailed = isFailedOrder(record.order_num || String(record.id));
+            const isFulfillFailed = Number(record.status?.id) === 78;
             
             if ((isFailed || isFulfillFailed) && isCustomize) {
               return 'bg-red-200 hover:bg-red-300 border-l-4 border-red-500'; // Failed + Customize
