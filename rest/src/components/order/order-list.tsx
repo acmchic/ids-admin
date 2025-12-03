@@ -149,10 +149,11 @@ const parseImageData = (imgData: any) => {
   return imgData;
 };
 
+
 const buildCustomizeImageUrl = (product: any, apiUrl: string): string | null => {
   const images = parseImageData(product?.image);
   if (images?.[0]?.original) {
-    return `${apiUrl}/images/${images[0].original}`;
+    return `https://customize.idreamshirt.com/uploads/customize/${images[0].original}`;
   }
   return null;
 };
@@ -1165,7 +1166,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
     const buildCustomizeImageUrl = (product: any): string | null => {
       const images = parseImageData(product.image);
-      if (images?.[0]?.original) return `${API_URL}/images/${images[0].original}`;
+      if (images?.[0]?.original) return `https://customize.idreamshirt.com/uploads/customize/${images[0].original}`;
       return null;
     };
 
