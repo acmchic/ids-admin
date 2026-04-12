@@ -5,6 +5,7 @@ import { useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { adminOnly } from "@utils/auth-utils";
 import Loader from "@components/ui/loader/loader";
+import { toast } from "react-toastify";
 
 type Campaign = {
   id: number;
@@ -128,12 +129,15 @@ export default function EmailCampaigns() {
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
 
-  // Contacts state
-  const [contactsData, setContactsData] = useState<ContactsData | null>(null);
-  const [contactsLoading, setContactsLoading] = useState(false);
-  const [contactsPage, setContactsPage] = useState(1);
-  const [contactsSearch, setContactsSearch] = useState("");
-  const [contactsSource, setContactsSource] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [createLoading, setCreateLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: "",
+    subject: "",
+    discountCode: "WELCOME",
+    discountPercent: "30",
+    ctaUrl: "https://idreamshirt.com/products/customize/premium-t-shirt",
+  });
 
   const fetchData = useCallback(async () => {
     try {
@@ -149,6 +153,33 @@ export default function EmailCampaigns() {
       setLoading(false);
     }
   }, []);
+
+  const handleCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setCreateLoading(true);
+      const res = await fetch("/api/email-campaigns/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData),
+      });
+      if (!res.ok) throw new Error("Failed to create campaign");
+      await fetchData();
+      toast.success("Campaign created successfully! ✨");
+      setShowCreateModal(false);
+      setFormData({
+        name: "",
+        subject: "",
+        discountCode: "WELCOME",
+        discountPercent: "30",
+        ctaUrl: "https://idreamshirt.com/products/customize/premium-t-shirt",
+      });
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setCreateLoading(false);
+    }
+  };
 
   const fetchContacts = useCallback(async (page = 1, search = "", source = "") => {
     try {
@@ -211,6 +242,86 @@ export default function EmailCampaigns() {
 
   return (
     <>
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-50">
+          <div className="bg-white rounded-xl w-full max-w-lg overflow-hidden shadow-2xl">
+            <div className="p-6 border-b flex items-center justify-between bg-gray-50">
+              <h2 className="text-xl font-bold text-gray-900">✨ New Email Campaign</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-gray-400 hover:text-gray-600 font-bold">✕</button>
+            </div>
+            <form onSubmit={handleCreate} className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Campaign Name</label>
+                <input
+                  required
+                  placeholder="e.g. Welcome Back - April 2024"
+                  className="w-full border rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none"
+                  value={formData.name}
+                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Email Subject</label>
+                <input
+                  required
+                  placeholder="e.g. Special 30% OFF just for you!"
+                  className="w-full border rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none"
+                  value={formData.subject}
+                  onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Discount Code</label>
+                  <input
+                    placeholder="e.g. WELCOME"
+                    className="w-full border rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none"
+                    value={formData.discountCode}
+                    onChange={(e) => setFormData({ ...formData, discountCode: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Discount %</label>
+                  <input
+                    type="number"
+                    placeholder="e.g. 30"
+                    className="w-full border rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none"
+                    value={formData.discountPercent}
+                    onChange={(e) => setFormData({ ...formData, discountPercent: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">CTA URL</label>
+                <input
+                  placeholder="Link for Shop Now button"
+                  className="w-full border rounded-lg px-4 py-2 text-sm focus:ring-2 focus:ring-gray-900 focus:outline-none text-gray-500"
+                  value={formData.ctaUrl}
+                  onChange={(e) => setFormData({ ...formData, ctaUrl: e.target.value })}
+                />
+              </div>
+              <div className="pt-4 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="flex-1 px-4 py-2.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition font-semibold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={createLoading}
+                  className="flex-1 px-4 py-2.5 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition font-semibold disabled:opacity-50"
+                >
+                  {createLoading ? "Creating..." : "Create Campaign"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Header + Tabs */}
       <Card className="p-6 mb-6">
         <div className="flex items-center justify-between mb-4">
@@ -218,12 +329,20 @@ export default function EmailCampaigns() {
             <h1 className="text-2xl font-bold text-gray-900">📧 Email Campaigns</h1>
             <p className="text-sm text-gray-500 mt-1">Manage campaigns and contacts</p>
           </div>
-          <button
-            onClick={() => { fetchData(); if (activeTab === "contacts") fetchContacts(contactsPage, contactsSearch, contactsSource); }}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
-          >
-            ↻ Refresh
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => { fetchData(); if (activeTab === "contacts") fetchContacts(contactsPage, contactsSearch, contactsSource); }}
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition text-sm font-medium"
+            >
+              ↻ Refresh
+            </button>
+            <button
+              onClick={() => setShowCreateModal(true)}
+              className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition text-sm font-medium shadow-sm"
+            >
+              + Create Campaign
+            </button>
+          </div>
         </div>
 
         {/* Tabs */}
