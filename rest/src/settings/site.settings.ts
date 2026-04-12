@@ -72,6 +72,11 @@ export const siteSettings = {
         label: "sidebar-nav-item-orders",
         icon: "OrdersIcon",
       },
+      {
+        href: ROUTES.EMAIL_CAMPAIGNS,
+        label: "sidebar-nav-item-email-campaigns",
+        icon: "EmailCampaignIcon",
+      },
       // {
       //   href: ROUTES.ORDER_STATUS,
       //   label: "sidebar-nav-item-order-status",
