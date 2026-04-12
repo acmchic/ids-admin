@@ -30,7 +30,7 @@ export default async function handler(
 
       // Contacts list
       const contacts: any[] = await prisma.$queryRawUnsafe(
-        `SELECT id, email, name, source, source_detail, is_active, orders_count, total_spent, first_order_at, last_order_at, tags, created_at
+        `SELECT id, email, name, source, source_detail, is_active, orders_count, total_spent, first_order_at, last_order_at, tags, sent_count, last_sent_at, created_at
          FROM email_contacts
          ${whereClause}
          ORDER BY orders_count DESC, total_spent DESC
@@ -56,6 +56,7 @@ export default async function handler(
         is_active: Boolean(c.is_active),
         orders_count: Number(c.orders_count),
         total_spent: Number(c.total_spent),
+        sent_count: Number(c.sent_count || 0),
         tags: typeof c.tags === 'string' ? JSON.parse(c.tags) : c.tags,
       }));
 

@@ -96,5 +96,17 @@ export default async function handler(
     }
   }
 
+  if (req.method === "DELETE") {
+    try {
+      await prisma.$executeRaw`
+        DELETE FROM email_campaigns WHERE id = ${campaignId}
+      `;
+      return res.status(200).json({ message: "Campaign deleted successfully" });
+    } catch (error: any) {
+      console.error("Campaign delete API error:", error);
+      return res.status(500).json({ error: error.message });
+    }
+  }
+
   return res.status(405).json({ error: "Method not allowed" });
 }

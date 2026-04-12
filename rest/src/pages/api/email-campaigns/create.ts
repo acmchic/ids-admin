@@ -30,7 +30,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
 
-    return res.status(201).json(campaign);
+    // Convert BigInt to Number for JSON serialization
+    const safeCampaign = {
+      ...campaign,
+      id: Number(campaign.id),
+      discount_percent: campaign.discount_percent ? Number(campaign.discount_percent) : null,
+      batch_size: campaign.batch_size ? Number(campaign.batch_size) : null,
+    };
+
+    return res.status(201).json(safeCampaign);
   } catch (error: any) {
     console.error('Error creating campaign:', error);
     return res.status(500).json({ message: 'Failed to create campaign', error: error.message });

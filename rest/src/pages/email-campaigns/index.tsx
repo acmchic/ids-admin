@@ -139,6 +139,96 @@ export default function EmailCampaigns() {
     ctaUrl: "https://idreamshirt.com/products/customize/premium-t-shirt",
   });
 
+  // Contacts state
+  const [contactsData, setContactsData] = useState<ContactsData | null>(null);
+  const [contactsLoading, setContactsLoading] = useState(false);
+  const [contactsPage, setContactsPage] = useState(1);
+  const [contactsSearch, setContactsSearch] = useState("");
+  const [contactsSource, setContactsSource] = useState("");
+  const [extractLimit, setExtractLimit] = useState(300);
+  const [testEmail, setTestEmail] = useState("acmchic88@gmail.com");
+  const [actionLoading, setActionLoading] = useState(false);
+  const [dryRunData, setDryRunData] = useState<string[] | null>(null);
+  const [showSendConfirm, setShowSendConfirm] = useState(false);
+
+  const fetchCampaigns = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch("/api/email-campaigns");
+      const data = await res.json();
+      if (res.ok) setData(data);
+    } catch (err) {
+      toast.error("Failed to fetch campaigns");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const runAction = async (id: number, action: string) => {
+    try {
+      setActionLoading(true);
+      if (action === 'dry-run') setDryRunData(null);
+      
+      const res = await fetch("/api/email-campaigns/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ 
+          id, 
+          action, 
+          limit: action === 'extract' ? extractLimit : undefined,
+          email: action === 'test' ? testEmail : undefined
+        }),
+      });
+      const result = await res.json();
+      
+      if (res.ok) {
+        if (action === 'dry-run') {
+          // Parse output to find email list
+          const lines = result.output.split("\n")
+            .filter((l: string) => l.includes("→"))
+            .map((l: string) => l.replace("→", "").trim());
+          setDryRunData(lines);
+        } else {
+          toast.success(result.message || `Action ${action} successful`);
+          if (selectedCampaign) fetchDetail(id);
+          fetchCampaigns();
+          if (action === 'send') setShowSendConfirm(false);
+        }
+      } else {
+        toast.error(result.error || `Action ${action} failed`);
+      }
+    } catch (err) {
+      toast.error("Network error executing action");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const deleteCampaign = async (id: number) => {
+    if (!window.confirm("Are you sure you want to delete this campaign? This will remove all recipient data and cannot be undone.")) {
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/email-campaigns/${id}`, {
+        method: "DELETE",
+      });
+      const result = await res.json();
+      
+      if (res.ok) {
+        toast.success(result.message || "Campaign deleted");
+        fetchCampaigns();
+      } else {
+        toast.error(result.error || "Failed to delete campaign");
+      }
+    } catch (err) {
+      toast.error("Network error deleting campaign");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
@@ -208,13 +298,26 @@ export default function EmailCampaigns() {
     } catch (err: any) {
       setError(err.message);
     } finally {
-      setDetailLoading(false);
+    setDetailLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    if (activeTab === "campaigns") {
+      fetchCampaigns();
+    }
+  }, [activeTab, fetchCampaigns]);
+
+  // Auto-refresh for sending campaigns
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (selectedCampaign && selectedCampaign.campaign.status === 'sending') {
+      interval = setInterval(() => {
+        fetchDetail(selectedCampaign.campaign.id);
+      }, 10000); // 10 seconds
+    }
+    return () => clearInterval(interval);
+  }, [selectedCampaign, fetchDetail]);
 
   useEffect(() => {
     if (activeTab === "contacts") {
@@ -433,9 +536,20 @@ export default function EmailCampaigns() {
                           <td className="p-3 text-right font-mono font-semibold">{campaign.total_recipients.toLocaleString()}</td>
                           <td className="p-3 text-gray-500 text-xs">{campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : "-"}</td>
                           <td className="p-3 text-center">
-                            <button onClick={() => fetchDetail(campaign.id)} className="px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition text-xs font-medium">
-                              View Details
-                            </button>
+                            <div className="flex gap-2 justify-center">
+                              <button onClick={() => fetchDetail(campaign.id)} className="px-3 py-1.5 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition text-xs font-medium">
+                                View Details
+                              </button>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); deleteCampaign(campaign.id); }}
+                                className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition"
+                                title="Delete Campaign"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -455,9 +569,17 @@ export default function EmailCampaigns() {
                   <h2 className="text-xl font-bold text-gray-900">{selectedCampaign.campaign.name}</h2>
                   <p className="text-sm text-gray-500">{selectedCampaign.campaign.subject}</p>
                 </div>
-                <button onClick={() => setSelectedCampaign(null)} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm">
-                  ✕ Close
-                </button>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => { deleteCampaign(selectedCampaign.campaign.id); setSelectedCampaign(null); }} 
+                    className="px-3 py-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-600 hover:text-white transition text-sm font-medium"
+                  >
+                    🗑️ Delete
+                  </button>
+                  <button onClick={() => setSelectedCampaign(null)} className="px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition text-sm">
+                    ✕ Close
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
                 {selectedCampaign.stats.map((stat) => (
@@ -467,6 +589,129 @@ export default function EmailCampaigns() {
                   </div>
                 ))}
               </div>
+
+              {/* Action Buttons */}
+              <div className="bg-white border-2 border-orange-100 rounded-xl p-5 mb-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-xl">🛡️</span>
+                  <h3 className="text-base font-extrabold text-gray-800">Safety & Quality Control</h3>
+                </div>
+                
+                <div className="space-y-6">
+                  {/* Step 1: Extract */}
+                  <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-700 text-sm">Step 1: Extract High-Value Contacts</p>
+                      <p className="text-xs text-gray-500">Pick top customers based on order history.</p>
+                    </div>
+                    <div className="flex gap-2">
+                      <input 
+                        type="number" 
+                        value={extractLimit} 
+                        onChange={(e) => setExtractLimit(Number(e.target.value))}
+                        className="w-24 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 outline-none"
+                        placeholder="Limit"
+                      />
+                      <button 
+                        onClick={() => runAction(selectedCampaign.campaign.id, 'extract')}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-blue-50 text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-600 hover:text-white transition text-sm font-bold disabled:opacity-50"
+                      >
+                        {actionLoading ? "..." : "Extract"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Step 2: Test */}
+                  <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-700 text-sm">Step 2: Send Test Email</p>
+                      <p className="text-xs text-gray-500">Check how it looks in your own inbox first.</p>
+                    </div>
+                    <div className="flex gap-2 flex-1">
+                      <input 
+                        type="email" 
+                        value={testEmail} 
+                        onChange={(e) => setTestEmail(e.target.value)}
+                        className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-200 outline-none"
+                        placeholder="your-email@example.com"
+                      />
+                      <button 
+                        onClick={() => runAction(selectedCampaign.campaign.id, 'test')}
+                        disabled={actionLoading}
+                        className="px-4 py-2 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-600 hover:text-white transition text-sm font-bold disabled:opacity-50"
+                      >
+                        {actionLoading ? "..." : "Send Test"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Step 3: Dry Run & Send */}
+                  <div className="flex flex-col md:flex-row md:items-start gap-4 py-3">
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-700 text-sm">Step 3: Preview & Dispatch</p>
+                      <p className="text-xs text-gray-500">Preview the next 50 recipients before final send.</p>
+                    </div>
+                    <div className="flex flex-col gap-2 w-full md:w-auto">
+                      <div className="flex gap-2">
+                        <button 
+                          onClick={() => runAction(selectedCampaign.campaign.id, 'dry-run')}
+                          disabled={actionLoading}
+                          className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-200 transition text-sm font-bold disabled:opacity-50"
+                        >
+                          {actionLoading ? "..." : "Preview Batch (50)"}
+                        </button>
+                        <button 
+                          onClick={() => setShowSendConfirm(true)}
+                          disabled={actionLoading || selectedCampaign.campaign.status === 'completed'}
+                          className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-extrabold shadow-md hover:shadow-lg disabled:opacity-50"
+                        >
+                           🚀 Start Sending
+                        </button>
+                      </div>
+                      
+                      {dryRunData && (
+                        <div className="mt-3 bg-gray-900 text-green-400 p-3 rounded-lg text-[10px] font-mono max-h-40 overflow-y-auto border border-gray-700">
+                          <p className="text-gray-400 mb-1 font-sans border-b border-gray-800 pb-1">NEXT RECIPIENTS (PREVIEW):</p>
+                          {dryRunData.map((email, i) => (
+                            <p key={i}>→ {email}</p>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Confirmation Modal */}
+              {showSendConfirm && (
+                <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-red-100">
+                    <div className="text-center mb-6">
+                      <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">⚠️</div>
+                      <h3 className="text-xl font-black text-gray-900">Are you sure?</h3>
+                      <p className="text-sm text-gray-500 mt-2">
+                        This will send real emails to <strong>50 customers</strong>. Make sure you have tested the content and previewed the list.
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-3">
+                      <button 
+                        onClick={() => runAction(selectedCampaign.campaign.id, 'send')}
+                        disabled={actionLoading}
+                        className="w-full py-3 bg-green-600 text-white rounded-xl font-bold hover:bg-green-700 transition"
+                      >
+                        {actionLoading ? "Sending..." : "Yes, Dispatch Now"}
+                      </button>
+                      <button 
+                        onClick={() => setShowSendConfirm(false)}
+                        className="w-full py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               {selectedCampaign.failedRecipients.length > 0 && (
                 <div className="mb-6">
                   <h3 className="text-sm font-bold text-red-600 mb-2">❌ Failed ({selectedCampaign.failedRecipients.length})</h3>
@@ -592,8 +837,10 @@ export default function EmailCampaigns() {
                         <th className="text-left p-3 font-semibold text-gray-600">Source</th>
                         <th className="text-right p-3 font-semibold text-gray-600">Orders</th>
                         <th className="text-right p-3 font-semibold text-gray-600">Spent</th>
+                        <th className="text-right p-3 font-semibold text-gray-600">Sent</th>
                         <th className="text-left p-3 font-semibold text-gray-600">Tags</th>
                         <th className="text-left p-3 font-semibold text-gray-600">Last Order</th>
+                        <th className="text-left p-3 font-semibold text-gray-600">Last Sent</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -610,6 +857,7 @@ export default function EmailCampaigns() {
                           <td className="p-3 text-right font-mono text-green-600 font-semibold">
                             ${contact.total_spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
+                          <td className="p-3 text-right font-mono text-blue-600 font-semibold">{contact.sent_count || 0}</td>
                           <td className="p-3">
                             <div className="flex flex-wrap gap-1">
                               {contact.tags?.map((tag) => (
@@ -619,6 +867,9 @@ export default function EmailCampaigns() {
                           </td>
                           <td className="p-3 text-gray-500 text-xs">
                             {contact.last_order_at ? new Date(contact.last_order_at).toLocaleDateString() : "-"}
+                          </td>
+                          <td className="p-3 text-gray-500 text-xs font-medium">
+                            {contact.last_sent_at ? new Date(contact.last_sent_at).toLocaleDateString() : "-"}
                           </td>
                         </tr>
                       ))}
