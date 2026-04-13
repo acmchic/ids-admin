@@ -20,7 +20,7 @@ export default async function handler(
   // Standard development path: siblings (ids-admin/rest and orders)
   // Production server path: /home/production/admin and /home/production/order
   const artisanPath = path.resolve(process.cwd(), "..", "..", "orders", "artisan");
-  
+
   let command = "";
   if (action === "extract") {
     const limitArg = limit ? `--limit=${limit}` : "";
@@ -41,16 +41,16 @@ export default async function handler(
   exec(command, (error, stdout, stderr) => {
     if (error) {
       console.error(`Action error: ${error.message}`);
-      return res.status(500).json({ 
-        error: "Failed to execute command", 
+      return res.status(500).json({
+        error: "Failed to execute command",
         details: error.message,
-        stderr 
+        stderr
       });
     }
-    
-    return res.status(200).json({ 
+
+    return res.status(200).json({
       message: `Action ${action} executed successfully`,
-      output: stdout 
+      output: stdout
     });
   });
 }
