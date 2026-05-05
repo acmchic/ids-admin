@@ -154,7 +154,7 @@ export default function EmailCampaigns() {
   const fetchCampaigns = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/email-campaigns");
+      const res = await fetch(`/api/email-campaigns?t=${Date.now()}`, { cache: "no-store" });
       const data = await res.json();
       if (res.ok) setData(data);
     } catch (err) {
@@ -233,7 +233,7 @@ export default function EmailCampaigns() {
   const fetchData = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/email-campaigns");
+      const res = await fetch(`/api/email-campaigns?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch campaigns");
       const json = await res.json();
       setData(json);
@@ -292,7 +292,7 @@ export default function EmailCampaigns() {
   const fetchDetail = useCallback(async (id: number) => {
     try {
       setDetailLoading(true);
-      const res = await fetch(`/api/email-campaigns/${id}`);
+      const res = await fetch(`/api/email-campaigns/${id}?t=${Date.now()}`, { cache: "no-store" });
       if (!res.ok) throw new Error("Failed to fetch campaign detail");
       const json = await res.json();
       setSelectedCampaign(json);
