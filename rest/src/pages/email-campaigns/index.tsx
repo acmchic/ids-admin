@@ -176,6 +176,7 @@ export default function EmailCampaigns() {
           id, 
           action, 
           limit: action === 'extract' ? extractLimit : undefined,
+          batchSize: action === 'send' ? selectedPendingCount : undefined,
           email: action === 'test' ? testEmail : undefined
         }),
       });
@@ -329,6 +330,8 @@ export default function EmailCampaigns() {
     setContactsPage(1);
     fetchContacts(1, contactsSearch, contactsSource);
   };
+
+  const selectedPendingCount = selectedCampaign?.stats.find((stat) => stat.status === "pending")?.count || 0;
 
   if (loading) return <Loader text="Loading..." />;
   if (error && !data) {
@@ -601,8 +604,8 @@ export default function EmailCampaigns() {
                   {/* Step 1: Extract */}
                   <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
                     <div className="flex-1">
-                      <p className="font-bold text-gray-700 text-sm">Step 1: Extract High-Value Contacts</p>
-                      <p className="text-xs text-gray-500">Pick top customers based on order history.</p>
+                      <p className="font-bold text-gray-700 text-sm">Step 1: Extract Next Unsent Contacts</p>
+                      <p className="text-xs text-gray-500">Pick top customers who have not received a campaign email yet.</p>
                     </div>
                     <div className="flex gap-2">
                       <input 
@@ -650,7 +653,7 @@ export default function EmailCampaigns() {
                   <div className="flex flex-col md:flex-row md:items-start gap-4 py-3">
                     <div className="flex-1">
                       <p className="font-bold text-gray-700 text-sm">Step 3: Preview & Dispatch</p>
-                      <p className="text-xs text-gray-500">Preview the next 50 recipients before final send.</p>
+                      <p className="text-xs text-gray-500">Preview the next 50 recipients, then send all pending recipients.</p>
                     </div>
                     <div className="flex flex-col gap-2 w-full md:w-auto">
                       <div className="flex gap-2">
@@ -663,7 +666,7 @@ export default function EmailCampaigns() {
                         </button>
                         <button 
                           onClick={() => setShowSendConfirm(true)}
-                          disabled={actionLoading || selectedCampaign.campaign.status === 'completed'}
+                          disabled={actionLoading || selectedPendingCount === 0}
                           className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-extrabold shadow-md hover:shadow-lg disabled:opacity-50"
                         >
                            🚀 Start Sending
@@ -691,7 +694,7 @@ export default function EmailCampaigns() {
                       <div className="w-16 h-16 bg-red-50 text-red-600 rounded-full flex items-center justify-center text-3xl mx-auto mb-4">⚠️</div>
                       <h3 className="text-xl font-black text-gray-900">Are you sure?</h3>
                       <p className="text-sm text-gray-500 mt-2">
-                        This will send real emails to <strong>50 customers</strong>. Make sure you have tested the content and previewed the list.
+                        This will send real emails to <strong>{selectedPendingCount.toLocaleString()} customers</strong>. Make sure you have tested the content and previewed the list.
                       </p>
                     </div>
                     <div className="flex flex-col gap-3">

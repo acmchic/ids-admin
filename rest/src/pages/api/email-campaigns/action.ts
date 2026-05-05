@@ -10,10 +10,25 @@ export default async function handler(
     return res.status(405).json({ error: "Method not allowed" });
   }
 
-  const { id, action, limit } = req.body;
+  const { id, action, limit, batchSize } = req.body;
 
   if (!id || !action) {
     return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  const campaignId = Number(id);
+  if (!Number.isInteger(campaignId) || campaignId <= 0) {
+    return res.status(400).json({ error: "Invalid campaign ID" });
+  }
+
+  const safeLimit = limit ? Number(limit) : undefined;
+  if (safeLimit !== undefined && (!Number.isInteger(safeLimit) || safeLimit <= 0 || safeLimit > 10000)) {
+    return res.status(400).json({ error: "Invalid limit" });
+  }
+
+  const safeBatchSize = batchSize ? Number(batchSize) : undefined;
+  if (safeBatchSize !== undefined && (!Number.isInteger(safeBatchSize) || safeBatchSize <= 0 || safeBatchSize > 10000)) {
+    return res.status(400).json({ error: "Invalid batch size" });
   }
 
   // Determine path to artisan
@@ -23,15 +38,17 @@ export default async function handler(
 
   let command = "";
   if (action === "extract") {
-    const limitArg = limit ? `--limit=${limit}` : "";
-    command = `php \"${artisanPath}\" campaign:extract-emails ${id} ${limitArg}`;
+    const limitArg = safeLimit ? `--limit=${safeLimit}` : "";
+    command = `php \"${artisanPath}\" campaign:extract-emails ${campaignId} ${limitArg}`;
   } else if (action === "send") {
-    command = `php \"${artisanPath}\" campaign:send-batch ${id}`;
+    const batchArg = safeBatchSize ? `--batch-size=${safeBatchSize}` : "";
+    command = `php \"${artisanPath}\" campaign:send-batch ${campaignId} ${batchArg}`;
   } else if (action === "test") {
     const testEmail = req.body.email || "acmchic88@gmail.com";
-    command = `php \"${artisanPath}\" campaign:test ${id} ${testEmail}`;
+    command = `php \"${artisanPath}\" campaign:test ${campaignId} ${testEmail}`;
   } else if (action === "dry-run") {
-    command = `php \"${artisanPath}\" campaign:send-batch ${id} --dry-run`;
+    const batchArg = safeBatchSize ? `--batch-size=${safeBatchSize}` : "";
+    command = `php \"${artisanPath}\" campaign:send-batch ${campaignId} ${batchArg} --dry-run`;
   } else {
     return res.status(400).json({ error: "Invalid action" });
   }
