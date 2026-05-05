@@ -22,7 +22,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         discount_code: discountCode || null,
         discount_percent: discountPercent ? parseInt(discountPercent) : null,
         cta_url: ctaUrl || 'https://idreamshirt.com/products/customize/premium-t-shirt',
-        cta_text: ctaText || 'Shop Now',
+        cta_text: ctaText || (discountPercent ? `Get ${parseInt(discountPercent)}% Off Now` : 'Start Your Custom Shirt'),
         status: 'draft',
         preview_text: `30% OFF - Custom Design Service`,
         heading: 'Your Imagination,<br>Our Creation',
