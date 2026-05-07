@@ -6,6 +6,8 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 
 const execAsync = promisify(exec);
+const STORAGE_TYPES = ['images', 'customize'] as const;
+type StorageType = typeof STORAGE_TYPES[number];
 
 export const config = {
   api: {
@@ -38,7 +40,7 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
       maxFileSize: 25 * 1024 * 1024, // 25MB limit
     });
 
-    const [fields, files] = await new Promise((resolve, reject) => {
+    const [fields, files]: any = await new Promise<any>((resolve, reject) => {
       form.parse(req, (err, fields, files) => {
         if (err) reject(err);
         else resolve([fields, files]);
@@ -48,12 +50,17 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     const file = files.file?.[0];
     const imagePath = fields.path?.[0]; // param1: path (e.g., "custom/x")
     const originalFileName = fields.fileName?.[0]; // param2: original fileName (e.g., "image.png")
+    const requestedStorage = (fields.storage?.[0] || 'images') as StorageType;
 
     if (!file || !imagePath || !originalFileName) {
       return res.status(400).json({ 
         error: 'Missing required parameters',
         required: ['file', 'path', 'fileName']
       });
+    }
+
+    if (!STORAGE_TYPES.includes(requestedStorage)) {
+      return res.status(400).json({ error: 'Invalid storage parameter' });
     }
 
     // PRODUCTION SECURITY: STRICT VALIDATION
@@ -77,8 +84,7 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
 
     // Get uploaded file name and extension
     const uploadedFileName = file.originalFilename || 'uploaded_file';
-    const uploadedFileExtension = path.extname(uploadedFileName).toLowerCase();
-    
+
     // Determine final file name based on comparison
     let finalFileName: string;
     let isReplacing = false;
@@ -112,7 +118,9 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     }
 
     // SAFE PATH CONSTRUCTION - Prevent any directory manipulation
-    let remoteFolder = process.env.SCP_REMOTE_FOLDER || '/home/images_ids/images';
+    let remoteFolder = requestedStorage === 'customize'
+      ? (process.env.SCP_CUSTOMIZE_REMOTE_FOLDER || '/home/production/image-server/customize')
+      : (process.env.SCP_REMOTE_FOLDER || '/home/images_ids/images');
     // Ensure remoteFolder starts with /
     if (!remoteFolder.startsWith('/')) {
       remoteFolder = '/' + remoteFolder;
@@ -140,7 +148,8 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
       originalFileName: originalFileName,
       uploadedFileName: uploadedFileName,
       finalFileName: finalFileName,
-      isReplacing: isReplacing
+      isReplacing: isReplacing,
+      storage: requestedStorage
     });
 
     // SSH configuration - using same pattern as upscayl
@@ -207,11 +216,14 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
       success: true, 
       message: message,
       serverPath: normalizedPath,
-      url: `https://api.idreamshirt.com/images/${imagePath}/${finalFileName}`,
+      url: requestedStorage === 'customize'
+        ? `https://customize.idreamshirt.com/uploads/customize/${imagePath}/${finalFileName}`
+        : `https://api.idreamshirt.com/images/${imagePath}/${finalFileName}`,
       isReplacing: isReplacing,
       originalFileName: originalFileName,
       uploadedFileName: uploadedFileName,
-      finalFileName: finalFileName
+      finalFileName: finalFileName,
+      storage: requestedStorage
     });
 
   } catch (error) {
@@ -223,4 +235,3 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     });
   }
 }
-

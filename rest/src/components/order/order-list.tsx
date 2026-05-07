@@ -149,11 +149,37 @@ const parseImageData = (imgData: any) => {
   return imgData;
 };
 
+const normalizeCustomizeImagePath = (imagePath?: string): string => {
+  if (!imagePath) return "";
 
-const buildCustomizeImageUrl = (product: any, apiUrl: string): string | null => {
+  try {
+    const url = new URL(imagePath);
+    const marker = "/uploads/customize/";
+    const markerIndex = url.pathname.indexOf(marker);
+    if (markerIndex !== -1) {
+      return decodeURIComponent(url.pathname.slice(markerIndex + marker.length)).replace(/^\/+/, "");
+    }
+  } catch {
+    // Not a full URL, continue with path normalization.
+  }
+
+  return imagePath
+    .replace(/^https?:\/\/[^/]+\/uploads\/customize\//, "")
+    .replace(/^\/?uploads\/customize\//, "")
+    .replace(/^customize\//, "")
+    .replace(/^\/+/, "");
+};
+
+const buildCustomizeImageUrlFromPath = (imagePath?: string): string | null => {
+  const normalizedPath = normalizeCustomizeImagePath(imagePath);
+  return normalizedPath ? `https://customize.idreamshirt.com/uploads/customize/${normalizedPath}` : null;
+};
+
+
+const buildCustomizeImageUrl = (product: any): string | null => {
   const images = parseImageData(product?.image);
   if (images?.[0]?.original) {
-    return `https://customize.idreamshirt.com/uploads/customize/${images[0].original}`;
+    return buildCustomizeImageUrlFromPath(images[0].original);
   }
   return null;
 };
@@ -189,6 +215,26 @@ const getImagePathForUpload = (url: string): string => {
   return imagesIndex !== -1 ? parts.slice(imagesIndex + 1, -1).join("/") : "custom";
 };
 
+const getUploadTargetFromUrl = (url: string): { imagePath: string; fileName: string; storage: "images" | "customize" } => {
+  const normalizedCustomizePath = normalizeCustomizeImagePath(url);
+
+  if (url.includes("/uploads/customize/") || normalizedCustomizePath !== url) {
+    const parts = normalizedCustomizePath.split("/").filter(Boolean);
+    const fileName = parts.pop() || "unknown";
+    return {
+      imagePath: parts.join("/"),
+      fileName,
+      storage: "customize",
+    };
+  }
+
+  return {
+    imagePath: getImagePathForUpload(url),
+    fileName: url.split("/").pop() || "unknown",
+    storage: "images",
+  };
+};
+
 // Function to get original artwork URL from pivot.img_url
 const getOriginalArtworkUrl = (pivotImgUrl: string): string => {
   // pivotImgUrl is usually the original artwork URL like:
@@ -208,7 +254,7 @@ const countInStatuses = (orders: any[] | undefined, ids: number[]) =>
   orders?.filter((order) => ids.includes(Number(order.status?.id))).length ?? 0;
 
 const buildProductImageUrls = (product: any, apiUrl: string) => {
-  const customizeUrl = buildCustomizeImageUrl(product, apiUrl);
+  const customizeUrl = buildCustomizeImageUrl(product);
   if (customizeUrl) {
     return {
       display: customizeUrl,
@@ -661,7 +707,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     return textarea.value;
   };
 
-  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>, productId: string, imagePath: string, fileName: string) => {
+  const handleImageUpload = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+    productId: string,
+    imagePath: string,
+    fileName: string,
+    storage: "images" | "customize" = "images"
+  ) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
@@ -697,6 +749,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       formData.append('file', file);
       formData.append('path', imagePath);
       formData.append('fileName', decodedFileName);
+      formData.append('storage', storage);
 
       const response = await fetch('/api/upload-image', {
         method: 'POST',
@@ -1147,8 +1200,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   align: "center",
   width: 300,
   render: (products: any[]) => {
-    const API_URL = getApiUrl();
-
     /** ===============================
      *  🔧 Helper functions (Memoized)
      *  =============================== */
@@ -1166,7 +1217,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
     const buildCustomizeImageUrl = (product: any): string | null => {
       const images = parseImageData(product.image);
-      if (images?.[0]?.original) return `https://customize.idreamshirt.com/uploads/customize/${images[0].original}`;
+      if (images?.[0]?.original) return buildCustomizeImageUrlFromPath(images[0].original);
       return null;
     };
 
@@ -1193,12 +1244,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         return parts.slice(3, 5).join("/") || "N/A";
       }
       return "N/A";
-    };
-
-    const getImagePathForUpload = (url: string): string => {
-      const parts = url.split("/");
-      const imagesIndex = parts.indexOf("images");
-      return imagesIndex !== -1 ? parts.slice(imagesIndex + 1, -1).join("/") : "custom";
     };
 
     /** ===============================
@@ -1311,7 +1356,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         let displayImgUrl = "";
 
         if (firstProduct) {
-          const customizeUrl = buildCustomizeImageUrl(firstProduct, getApiUrl());
+          const customizeUrl = buildCustomizeImageUrl(firstProduct);
           if (customizeUrl) {
             displayImgUrl = customizeUrl;
           } else {
@@ -1321,8 +1366,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
         const uploadKey = firstProduct ? `${firstProduct.id}-image-total` : undefined;
         const originalLink = firstProduct ? buildRegularProductImageUrls(firstProduct).link || displayImgUrl : displayImgUrl;
-        const imagePath = originalLink ? getImagePathForUpload(originalLink) : "";
-        const fileName = displayImgUrl ? displayImgUrl.split("/").pop() || "unknown" : "unknown";
+        const uploadTarget = getUploadTargetFromUrl(displayImgUrl || originalLink);
+        const imagePath = uploadTarget.imagePath;
+        const fileName = uploadTarget.fileName;
         const isUploading = uploadKey ? Boolean(uploadingImages[uploadKey]) : false;
 
         const handleClickUpload = () => {
@@ -1337,7 +1383,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           input.type = "file";
           input.accept = "image/*";
           input.onchange = (event) => {
-            handleImageUpload(event as any, firstProduct.id.toString(), imagePath, fileName);
+            handleImageUpload(event as any, firstProduct.id.toString(), imagePath, fileName, uploadTarget.storage);
             document.body.removeChild(input);
           };
           document.body.appendChild(input);
