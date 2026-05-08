@@ -51,6 +51,7 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     const imagePath = fields.path?.[0]; // param1: path (e.g., "custom/x")
     const originalFileName = fields.fileName?.[0]; // param2: original fileName (e.g., "image.png")
     const requestedStorage = (fields.storage?.[0] || 'images') as StorageType;
+    const forceReplace = fields.forceReplace?.[0] === '1' || fields.forceReplace?.[0] === 'true';
 
     if (!file || !imagePath || !originalFileName) {
       return res.status(400).json({ 
@@ -89,7 +90,7 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     let finalFileName: string;
     let isReplacing = false;
     
-    if (uploadedFileName === originalFileName) {
+    if (forceReplace || uploadedFileName === originalFileName) {
       // Same name - replace original file
       finalFileName = originalFileName;
       isReplacing = true;

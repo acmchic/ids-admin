@@ -73,6 +73,11 @@ export const siteSettings = {
         icon: "OrdersIcon",
       },
       {
+        href: ROUTES.CUSTOMIZE_UPLOADS,
+        label: "sidebar-nav-item-customize-uploads",
+        icon: "CustomizeUploadsIcon",
+      },
+      {
         href: ROUTES.EMAIL_CAMPAIGNS,
         label: "sidebar-nav-item-email-campaigns",
         icon: "EmailCampaignIcon",

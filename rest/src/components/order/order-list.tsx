@@ -108,6 +108,11 @@ const colorToSlug = (color?: string): string | undefined => {
   return slug || undefined;
 };
 
+const normalizeProductSlugForUrl = (slug?: string): string => {
+  if (!slug) return "";
+  return slug.replace(/^customize-customize-/, "customize-");
+};
+
 const convertToAtworkUrl = (imgUrl: string, colorSlug?: string): string => {
   if (!imgUrl) return imgUrl;
 
@@ -1091,9 +1096,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 <p
                   className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
                   onClick={() => {
-                    if (product.slug) {
+                    const productSlug = normalizeProductSlugForUrl(product.slug);
+                    if (productSlug) {
                       window.open(
-                        `https://idreamshirt.com/products/${product.slug}/${variantName}-${nameToSlug(color)}-size_${size}`,
+                        `https://idreamshirt.com/products/${productSlug}/${variantName}-${nameToSlug(color)}-size_${size}`,
                         "_blank"
                       );
                     }

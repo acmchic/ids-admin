@@ -24,4 +24,5 @@ export const ROUTES = {
   LOGOUT: "/logout",
   STAFFS: "/staffs",
   EMAIL_CAMPAIGNS: "/email-campaigns",
+  CUSTOMIZE_UPLOADS: "/customize-uploads",
 };
