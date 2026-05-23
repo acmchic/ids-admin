@@ -20,8 +20,23 @@ interface UploadRequest extends NextApiRequest {
 }
 
 export default async function handler(req: UploadRequest, res: NextApiResponse) {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+
+  const sendResponse = (statusCode: number, body: Record<string, unknown>) => {
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+
+    if (res.headersSent || res.writableEnded) {
+      return;
+    }
+
+    res.status(statusCode).json(body);
+  };
+
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
+    return sendResponse(405, { error: 'Method not allowed' });
   }
 
   // PRODUCTION SECURITY: Rate limiting check
@@ -29,9 +44,9 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
   console.log(`Upload request from IP: ${clientIP}`);
 
   // Add timeout for the entire request
-  const timeout = setTimeout(() => {
-    res.status(408).json({ error: 'Request timeout' });
-  }, 30000); // 30 seconds timeout
+  timeout = setTimeout(() => {
+    sendResponse(408, { error: 'Request timeout' });
+  }, 120000); // SCP uploads can take longer than 30 seconds on large files
 
   try {
     const form = formidable({
@@ -54,24 +69,24 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     const forceReplace = fields.forceReplace?.[0] === '1' || fields.forceReplace?.[0] === 'true';
 
     if (!file || !imagePath || !originalFileName) {
-      return res.status(400).json({ 
+      return sendResponse(400, { 
         error: 'Missing required parameters',
         required: ['file', 'path', 'fileName']
       });
     }
 
     if (!STORAGE_TYPES.includes(requestedStorage)) {
-      return res.status(400).json({ error: 'Invalid storage parameter' });
+      return sendResponse(400, { error: 'Invalid storage parameter' });
     }
 
     // PRODUCTION SECURITY: STRICT VALIDATION
     // Validate path format - only allow safe characters and prevent path traversal
     if (!imagePath || typeof imagePath !== 'string') {
-      return res.status(400).json({ error: 'Invalid path parameter' });
+      return sendResponse(400, { error: 'Invalid path parameter' });
     }
     
     if (!/^[a-zA-Z0-9\/_-]+$/.test(imagePath) || imagePath.includes('..') || imagePath.includes('//')) {
-      return res.status(400).json({ error: 'Invalid path format - security violation' });
+      return sendResponse(400, { error: 'Invalid path format - security violation' });
     }
     
     // PRODUCTION SECURITY: Prevent access to system directories
@@ -79,7 +94,7 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     const pathSegments = imagePath.toLowerCase().split('/');
     for (const segment of pathSegments) {
       if (forbiddenPaths.includes(segment)) {
-        return res.status(400).json({ error: 'Access to forbidden directory' });
+        return sendResponse(400, { error: 'Access to forbidden directory' });
       }
     }
 
@@ -102,7 +117,7 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
 
     // Validate final fileName format - only allow safe characters
     if (!/^[a-zA-Z0-9._-]+$/.test(finalFileName) || finalFileName.includes('..') || finalFileName.includes('/')) {
-      return res.status(400).json({ error: 'Invalid fileName format - security violation' });
+      return sendResponse(400, { error: 'Invalid fileName format - security violation' });
     }
 
     // PRODUCTION SECURITY: Strict file extension validation
@@ -111,11 +126,11 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     const fileExtension = path.extname(finalFileName).toLowerCase();
     
     if (dangerousExtensions.includes(fileExtension)) {
-      return res.status(400).json({ error: 'Dangerous file extension not allowed' });
+      return sendResponse(400, { error: 'Dangerous file extension not allowed' });
     }
     
     if (!allowedExtensions.includes(fileExtension)) {
-      return res.status(400).json({ error: 'Only image files are allowed' });
+      return sendResponse(400, { error: 'Only image files are allowed' });
     }
 
     // SAFE PATH CONSTRUCTION - Prevent any directory manipulation
@@ -135,12 +150,12 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     // CRITICAL SECURITY CHECK: Ensure path is within allowed directory
     const normalizedPath = path.normalize(serverPath);
     if (!normalizedPath.startsWith(remoteFolder)) {
-      return res.status(400).json({ error: 'Path traversal attack detected' });
+      return sendResponse(400, { error: 'Path traversal attack detected' });
     }
     
     // Additional check: prevent any attempt to access parent directories
     if (normalizedPath.includes('..') || normalizedPath.includes('//')) {
-      return res.status(400).json({ error: 'Malicious path detected' });
+      return sendResponse(400, { error: 'Malicious path detected' });
     }
 
     console.log('Uploading file:', {
@@ -206,14 +221,12 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
       // Don't throw error for permission setting, just log it
     }
 
-    clearTimeout(timeout);
-    
     // Return appropriate message based on whether we're replacing or adding new file
     const message = isReplacing 
       ? 'File uploaded successfully and safely - replaced original file'
       : 'File uploaded successfully and safely - added new file with different name';
     
-    res.status(200).json({ 
+    return sendResponse(200, { 
       success: true, 
       message: message,
       serverPath: normalizedPath,
@@ -228,9 +241,18 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     });
 
   } catch (error) {
-    clearTimeout(timeout);
+    if (timeout) {
+      clearTimeout(timeout);
+      timeout = undefined;
+    }
+
     console.error('Upload error:', error);
-    res.status(500).json({ 
+
+    if (res.headersSent || res.writableEnded) {
+      return;
+    }
+
+    return sendResponse(500, { 
       error: 'Upload failed', 
       details: error instanceof Error ? error.message : 'Unknown error' 
     });

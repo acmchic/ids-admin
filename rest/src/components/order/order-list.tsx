@@ -217,7 +217,16 @@ const getFolderPath = (url?: string): string => {
 const getImagePathForUpload = (url: string): string => {
   const parts = url.split("/");
   const imagesIndex = parts.indexOf("images");
-  return imagesIndex !== -1 ? parts.slice(imagesIndex + 1, -1).join("/") : "custom";
+  if (imagesIndex !== -1) {
+    return parts.slice(imagesIndex + 1, -1).join("/");
+  }
+
+  const mediaIndex = parts.indexOf("media");
+  if (mediaIndex !== -1) {
+    return parts.slice(mediaIndex + 4, -1).join("/");
+  }
+
+  return "custom";
 };
 
 const getUploadTargetFromUrl = (url: string): { imagePath: string; fileName: string; storage: "images" | "customize" } => {
@@ -747,7 +756,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         fileInputRefs.current[uploadKey]!.value = '';
       }
       toast.error('Upload timeout. Vui lòng thử lại.');
-    }, 35000);
+    }, 130000);
 
     try {
       const formData = new FormData();
@@ -1360,11 +1369,13 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         const discount = record.discount || 0;
         const firstProduct = record.products?.[0];
         let displayImgUrl = "";
+        let isCustomizeImage = false;
 
         if (firstProduct) {
           const customizeUrl = buildCustomizeImageUrl(firstProduct);
           if (customizeUrl) {
             displayImgUrl = customizeUrl;
+            isCustomizeImage = true;
           } else {
             displayImgUrl = buildRegularProductImageUrls(firstProduct).display;
           }
@@ -1372,7 +1383,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
         const uploadKey = firstProduct ? `${firstProduct.id}-image-total` : undefined;
         const originalLink = firstProduct ? buildRegularProductImageUrls(firstProduct).link || displayImgUrl : displayImgUrl;
-        const uploadTarget = getUploadTargetFromUrl(displayImgUrl || originalLink);
+        const uploadTarget = getUploadTargetFromUrl(isCustomizeImage ? displayImgUrl : originalLink);
         const imagePath = uploadTarget.imagePath;
         const fileName = uploadTarget.fileName;
         const isUploading = uploadKey ? Boolean(uploadingImages[uploadKey]) : false;

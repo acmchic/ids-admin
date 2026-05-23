@@ -52,7 +52,7 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
         fileInputRef.current.value = '';
       }
       toast.error('Upload timeout. Please try again.');
-    }, 35000);
+    }, 130000);
 
     try {
       const formData = new FormData();
