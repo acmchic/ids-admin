@@ -3,14 +3,12 @@ import Image from "next/image";
 import { Table } from "@components/ui/table";
 import ActionButtons from "@components/common/action-buttons";
 import { siteSettings } from "@settings/site.settings";
-import usePrice from "@utils/use-price";
 import Badge from "@components/ui/badge/badge";
 import { useRouter } from "next/router";
 import { useTranslation } from "next-i18next";
 import {
 	Product,
 	ProductPaginator,
-	ProductType,
 	Shop,
 	SortOrder,
 } from "@ts-types/generated";
@@ -23,6 +21,8 @@ export type IProps = {
 	onPagination: (current: number) => void;
 	onSort: (current: any) => void;
 	onOrder: (current: string) => void;
+	selectedSlugs?: string[];
+	onSelectedSlugsChange?: (slugs: string[]) => void;
 };
 
 type SortingObjType = {
@@ -30,7 +30,14 @@ type SortingObjType = {
 	column: string | null;
 };
 
-const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
+const ProductList = ({
+	products,
+	onPagination,
+	onSort,
+	onOrder,
+	selectedSlugs = [],
+	onSelectedSlugsChange,
+}: IProps) => {
 	const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 	const { data, paginatorInfo } = products! ?? {};
@@ -42,6 +49,41 @@ const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
 		sort: SortOrder.Desc,
 		column: null,
 	});
+
+	const pageSlugs = (data || []).map((product) => product.slug).filter(Boolean);
+	const selectedSlugSet = new Set(selectedSlugs);
+	const allPageSelected =
+		pageSlugs.length > 0 && pageSlugs.every((slug) => selectedSlugSet.has(slug));
+
+	function toggleSlug(slug: string, checked: boolean) {
+		if (!onSelectedSlugsChange || !slug) {
+			return;
+		}
+
+		const next = new Set(selectedSlugs);
+		if (checked) {
+			next.add(slug);
+		} else {
+			next.delete(slug);
+		}
+		onSelectedSlugsChange(Array.from(next));
+	}
+
+	function togglePageSlugs(checked: boolean) {
+		if (!onSelectedSlugsChange) {
+			return;
+		}
+
+		const next = new Set(selectedSlugs);
+		pageSlugs.forEach((slug) => {
+			if (checked) {
+				next.add(slug);
+			} else {
+				next.delete(slug);
+			}
+		});
+		onSelectedSlugsChange(Array.from(next));
+	}
 
 
 	const onHeaderClick = (column: string | null) => ({
@@ -61,6 +103,28 @@ const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
 
 	let columns = [
 		{
+			title: (
+				<input
+					type="checkbox"
+					aria-label="Select all products on this page"
+					checked={allPageSelected}
+					onChange={(event) => togglePageSlugs(event.target.checked)}
+				/>
+			),
+			dataIndex: "slug",
+			key: "select",
+			align: "center",
+			width: 48,
+			render: (slug: string) => (
+				<input
+					type="checkbox"
+					aria-label={`Select ${slug}`}
+					checked={selectedSlugSet.has(slug)}
+					onChange={(event) => toggleSlug(slug, event.target.checked)}
+				/>
+			),
+		},
+		{
 			title: t("table:table-item-image"),
 			dataIndex: "image",
 			key: "image",
@@ -68,7 +132,7 @@ const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
 			width: 74,
 			render: (image: any, { name }: { name: string }) => (
 				<Image
-					src={`${API_URL}/images/` + image?.thumbnail  ?? siteSettings.product.placeholder}
+					src={image?.thumbnail ? `${API_URL}/images/${image.thumbnail}` : siteSettings.product.placeholder}
 					alt={name}
 					layout="fixed"
 					width={42}
@@ -202,6 +266,19 @@ const ProductList = ({ products, onPagination, onSort, onOrder }: IProps) => {
 							: "bg-accent"
 					}
 				/>
+			),
+		},
+		{
+			title: "Slug",
+			dataIndex: "slug",
+			key: "slug",
+			align: alignLeft,
+			width: 220,
+			ellipsis: true,
+			render: (slug: string) => (
+				<span className="whitespace-nowrap truncate" title={slug}>
+					{slug}
+				</span>
 			),
 		},
 		{

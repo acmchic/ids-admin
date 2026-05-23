@@ -12,6 +12,7 @@ const fetchProducts = async ({ queryKey }: QueryParamsType) => {
   const {
     page,
     text,
+    slug,
     type,
     category,
     shop_id,
@@ -22,6 +23,7 @@ const fetchProducts = async ({ queryKey }: QueryParamsType) => {
   } = params as ProductsQueryOptionsType;
   const searchString = stringifySearchQuery({
     name: text,
+    slug,
     type,
     category,
     status,

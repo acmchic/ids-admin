@@ -40,6 +40,7 @@ export type ProductsQueryOptionsType = {
   page?: number;
   shop_id?: number;
   text?: string;
+  slug?: string;
   type?: string;
   category?: string;
   status?: string;

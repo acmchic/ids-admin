@@ -5,19 +5,23 @@ import ProductList from "@components/product/product-list";
 import ErrorMessage from "@components/ui/error-message";
 import Loader from "@components/ui/loader/loader";
 import { SortOrder } from "@ts-types/generated";
-import { useState } from "react";
+import { FormEvent, useState } from "react";
 import { useProductsQuery } from "@data/product/products.query";
 import { useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import SortForm from "@components/common/sort-form";
 import CategoryTypeFilter from "@components/product/category-type-filter";
 import cn from "classnames";
 import { ArrowDown } from "@components/icons/arrow-down";
 import { ArrowUp } from "@components/icons/arrow-up";
 import {adminOnly} from "@utils/auth-utils";
+import Button from "@components/ui/button";
+import { useBulkDraftProductsMutation } from "@data/product/product-bulk-draft.mutation";
 
 export default function ProductsPage() {
   const [searchTerm, setSearchTerm] = useState("");
+  const [slugTerm, setSlugTerm] = useState("");
+  const [slugInput, setSlugInput] = useState("");
+  const [selectedSlugs, setSelectedSlugs] = useState<string[]>([]);
   const [type, setType] = useState("");
   const [category, setCategory] = useState("");
   const [page, setPage] = useState(1);
@@ -25,6 +29,8 @@ export default function ProductsPage() {
   const [orderBy, setOrder] = useState("created_at");
   const [sortedBy, setColumn] = useState<SortOrder>(SortOrder.Desc);
   const [visible, setVisible] = useState(false);
+  const { mutate: bulkDraftProducts, isLoading: bulkDrafting } =
+    useBulkDraftProductsMutation();
 
   console.log(sortedBy);
 
@@ -41,6 +47,7 @@ export default function ProductsPage() {
     page,
     type,
     category,
+    slug: slugTerm,
     text: searchTerm,
     orderBy,
     sortedBy,
@@ -52,6 +59,33 @@ export default function ProductsPage() {
   function handleSearch({ searchText }: { searchText: string }) {
     setSearchTerm(searchText);
     setPage(1);
+    setSelectedSlugs([]);
+  }
+  function handleSlugSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSlugTerm(slugInput.trim());
+    setPage(1);
+    setSelectedSlugs([]);
+  }
+  function handleClearSlugSearch() {
+    setSlugInput("");
+    setSlugTerm("");
+    setPage(1);
+    setSelectedSlugs([]);
+  }
+  function handleBulkDraft() {
+    if (selectedSlugs.length === 0) {
+      return;
+    }
+
+    bulkDraftProducts(
+      { slugs: selectedSlugs },
+      {
+        onSuccess: () => {
+          setSelectedSlugs([]);
+        },
+      }
+    );
   }
   function handlePagination(current: any) {
     setPage(current);
@@ -83,6 +117,52 @@ export default function ProductsPage() {
           </button>
         </div>
 
+        <form
+          className="w-full flex flex-col md:flex-row gap-3 mt-5"
+          onSubmit={handleSlugSearch}
+        >
+          <input
+            type="text"
+            value={slugInput}
+            onChange={(event) => setSlugInput(event.target.value)}
+            className="px-4 h-12 w-full rounded border border-border-base text-heading text-sm focus:outline-none focus:border-accent"
+            placeholder="Filter by product slug or product URL"
+            aria-label="Filter by product slug"
+            autoComplete="off"
+          />
+          <div className="flex gap-3">
+            <Button type="submit" className="whitespace-nowrap">
+              Filter slug
+            </Button>
+            {!!slugTerm && (
+              <Button
+                type="button"
+                variant="outline"
+                className="whitespace-nowrap"
+                onClick={handleClearSlugSearch}
+              >
+                Clear
+              </Button>
+            )}
+          </div>
+        </form>
+
+        {selectedSlugs.length > 0 && (
+          <div className="mt-5 flex flex-col md:flex-row md:items-center md:justify-between gap-3 border-t border-gray-200 pt-5">
+            <p className="text-sm font-semibold text-heading">
+              Selected {selectedSlugs.length} product{selectedSlugs.length === 1 ? "" : "s"}
+            </p>
+            <Button
+              type="button"
+              onClick={handleBulkDraft}
+              loading={bulkDrafting}
+              disabled={bulkDrafting}
+            >
+              Move selected to draft
+            </Button>
+          </div>
+        )}
+
         <div
           className={cn("w-full flex transition", {
             "h-auto visible": visible,
@@ -107,6 +187,8 @@ export default function ProductsPage() {
         onPagination={handlePagination}
         onOrder={setOrder}
         onSort={setColumn}
+        selectedSlugs={selectedSlugs}
+        onSelectedSlugsChange={setSelectedSlugs}
       />
     </>
   );
