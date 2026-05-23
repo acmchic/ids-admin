@@ -1378,7 +1378,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           }
         }
 
-        const uploadKey = firstProduct ? `${firstProduct.id}-image-total` : undefined;
+        const uploadKey = firstProduct ? `${firstProduct.id}-image` : undefined;
         const originalLink = firstProduct ? buildRegularProductImageUrls(firstProduct).link || displayImgUrl : displayImgUrl;
         const uploadTarget = getUploadTargetFromUrl(isCustomizeImage ? displayImgUrl : originalLink);
         const imagePath = uploadTarget.imagePath;
