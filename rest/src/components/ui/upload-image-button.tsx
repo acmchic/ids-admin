@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { toast } from 'react-toastify';
+import { Loader2, UploadCloud } from 'lucide-react';
 
 interface UploadImageButtonProps {
   imagePath: string;
@@ -59,6 +60,7 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
       formData.append('file', file);
       formData.append('path', imagePath);
       formData.append('fileName', decodedFileName);
+      formData.append('forceReplace', '1');
 
       const response = await fetch('/api/upload-image', {
         method: 'POST',
@@ -75,11 +77,7 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
       const result = await response.json();
 
       if (response.ok) {
-        if (result.isReplacing) {
-          toast.success('Upload thành công! Đã thay thế ảnh gốc.');
-        } else {
-          toast.success(`Upload thành công! File ảnh khác tên - đã upload với tên mới: ${result.finalFileName}`);
-        }
+        toast.success('Upload thành công! Đã thay thế ảnh gốc.');
         onUploadSuccess?.();
       } else {
         console.error('Upload failed:', result);
@@ -135,11 +133,10 @@ const UploadImageButton: React.FC<UploadImageButtonProps> = ({
         title="Upload new artwork image"
       >
         {isUploading ? (
-          <span className="w-4 h-4 animate-spin">⏳</span>
+          <Loader2 className="h-4 w-4 animate-spin" />
         ) : (
-          <span className="w-4 h-4">📤</span>
+          <UploadCloud className="h-4 w-4" />
         )}
-        {isUploading ? 'Up...' : 'Up'}
       </button>
     </div>
   );

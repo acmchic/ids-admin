@@ -2,7 +2,7 @@ import Layout from "@components/layouts/admin";
 import Button from "@components/ui/button";
 import { adminOnly } from "@utils/auth-utils";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
-import { Copy, Download, ExternalLink, RefreshCw, Search, Trash2, UploadCloud } from "lucide-react";
+import { Copy, Download, ExternalLink, Loader2, RefreshCw, Search, Trash2, UploadCloud } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "react-toastify";
 
@@ -378,7 +378,11 @@ export default function CustomizeUploadsPage() {
                     className="inline-flex h-10 items-center justify-center rounded border border-border-200 text-body transition hover:border-accent hover:text-accent disabled:cursor-not-allowed disabled:opacity-60"
                     title="Replace"
                   >
-                    <UploadCloud className="h-4 w-4" />
+                    {isReplacing ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <UploadCloud className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
 

@@ -22,7 +22,7 @@ import { ClockLoader } from "react-spinners";
 
 import { useIsRTL } from "@utils/locals";
 import { UsState } from "../../utils/us-states";
-import { AlertTriangle, Search, UploadCloud } from "lucide-react";
+import { AlertTriangle, Loader2, Search, UploadCloud } from "lucide-react";
 import { getApiUrl } from "../../config/api";
 import CreateIssueModal from "./create-issue-modal";
 import { determineAutoFulfillSelections } from "../../utils/orders/auto-fulfill-selection";
@@ -764,6 +764,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       formData.append('path', imagePath);
       formData.append('fileName', decodedFileName);
       formData.append('storage', storage);
+      formData.append('forceReplace', '1');
 
       const response = await fetch('/api/upload-image', {
         method: 'POST',
@@ -780,11 +781,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       const result = await response.json();
 
       if (response.ok) {
-        if (result.isReplacing) {
-          toast.success('Upload thành công! Đã thay thế ảnh artwork.');
-        } else {
-          toast.success(`Upload thành công! File ảnh khác tên - đã upload với tên mới: ${result.finalFileName}`);
-        }
+        toast.success('Upload thành công! Đã thay thế ảnh artwork.');
         // Không reload trang, chỉ show thông báo thành công
       } else {
         console.error('❌ Upload failed:', result);
@@ -1419,12 +1416,14 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               <Button
                 onClick={handleClickUpload}
                 disabled={isUploading}
-                loading={isUploading}
                 variant="outline"
                 size="small"
               >
-                <UploadCloud className="h-4 w-4" />
-                <span>{isUploading ? "Uploading..." : ""}</span>
+                {isUploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <UploadCloud className="h-4 w-4" />
+                )}
               </Button>
             )}
           </div>
