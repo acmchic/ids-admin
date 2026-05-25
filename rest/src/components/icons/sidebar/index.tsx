@@ -18,3 +18,4 @@ export { TaxesIcon } from "@components/icons/sidebar/taxes";
 export { default as ToggleIcon } from "@components/icons/sidebar/toggle";
 export { EmailCampaignIcon } from "@components/icons/sidebar/email-campaign";
 export { CustomizeUploadsIcon } from "@components/icons/sidebar/customize-uploads";
+export { CustomizeLeadsIcon } from "@components/icons/sidebar/customize-leads";

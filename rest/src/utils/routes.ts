@@ -25,4 +25,5 @@ export const ROUTES = {
   STAFFS: "/staffs",
   EMAIL_CAMPAIGNS: "/email-campaigns",
   CUSTOMIZE_UPLOADS: "/customize-uploads",
+  CUSTOMIZE_LEADS: "/customize-leads",
 };

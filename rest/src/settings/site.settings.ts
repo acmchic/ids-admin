@@ -78,6 +78,11 @@ export const siteSettings = {
         icon: "CustomizeUploadsIcon",
       },
       {
+        href: ROUTES.CUSTOMIZE_LEADS,
+        label: "Customize Leads",
+        icon: "CustomizeLeadsIcon",
+      },
+      {
         href: ROUTES.EMAIL_CAMPAIGNS,
         label: "sidebar-nav-item-email-campaigns",
         icon: "EmailCampaignIcon",
