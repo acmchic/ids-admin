@@ -37,6 +37,19 @@ const ensureLeadTable = async () => {
 
 const toNumber = (value: unknown) => Number(value || 0);
 
+const hasOrderProductColumn = async (column: string) => {
+  const [rows]: any = await db.execute(
+    `SELECT COUNT(*) AS count
+     FROM INFORMATION_SCHEMA.COLUMNS
+     WHERE TABLE_SCHEMA = DATABASE()
+       AND TABLE_NAME = 'order_product'
+       AND COLUMN_NAME = ?`,
+    [column]
+  );
+
+  return Number(rows?.[0]?.count || 0) > 0;
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -65,6 +78,10 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   try {
     await ensureLeadTable();
+    const canJoinByCustomizeSlug = await hasOrderProductColumn("customize_slug");
+    const orderProductJoin = canJoinByCustomizeSlug
+      ? "LEFT JOIN order_product op ON op.is_customize = 1 AND (op.product_id = cul.product_customize_id OR op.customize_slug = cul.customize_slug)"
+      : "LEFT JOIN order_product op ON op.product_id = cul.product_customize_id AND op.is_customize = 1";
 
     const [countRows]: any = await db.execute(
       `SELECT COUNT(*) AS total, COUNT(DISTINCT email) AS unique_emails
@@ -82,7 +99,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         MAX(o.order_num) AS latest_order_num
       FROM customize_upload_leads cul
       LEFT JOIN products_customize pc ON pc.id = cul.product_customize_id
-      LEFT JOIN order_product op ON op.product_id = cul.product_customize_id AND op.is_customize = 1
+      ${orderProductJoin}
       LEFT JOIN orders o ON o.id = op.order_id
       ${whereSql}
       GROUP BY cul.id, pc.name
