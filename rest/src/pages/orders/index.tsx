@@ -8,6 +8,7 @@ import Loader from "@components/ui/loader/loader";
 import { useOrdersQuery } from "@data/order/use-orders.query";
 import { useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
+import type { GetServerSideProps } from "next";
 import { SortOrder } from "@ts-types/generated";
 import { adminOnly } from "@utils/auth-utils";
 import DatePicker from "react-datepicker";
@@ -413,8 +414,12 @@ Orders.authenticate = {
 
 Orders.Layout = Layout;
 
-export const getStaticProps = async ({ locale }: any) => ({
-  props: {
-    ...(await serverSideTranslations(locale, ["table", "common", "form"])),
-  },
-});
+export const getServerSideProps: GetServerSideProps = async ({ locale, res }) => {
+  res.setHeader("Cache-Control", "no-store");
+
+  return {
+    props: {
+      ...(await serverSideTranslations(locale!, ["table", "common", "form"])),
+    },
+  };
+};
