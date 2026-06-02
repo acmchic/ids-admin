@@ -84,6 +84,15 @@ const logFulfilledOrdersError = async (orders: any[], statusCode: number, errorM
   }
 };
 
+const getFulfillmentErrorMessage = (error: any): string => {
+  return (
+    error?.response?.data?.message ||
+    error?.response?.data?.error ||
+    error?.message ||
+    "Fulfillment failed. Please check logs."
+  );
+};
+
 
 type IProps = {
   orders: OrderPaginator | null | undefined;
@@ -642,6 +651,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       });
 
       let completedCount = 0;
+      let failedCount = 0;
 
       for (const status of Object.keys(grouped)) {
         const ordersForStatus = grouped[+status];
@@ -663,10 +673,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           } catch (err: any) {
             console.error(`❌ Failed to fulfill order ${order.id}`, err);
 
-            const errMsg =
-              err?.response?.data?.message ||
-              err?.message ||
-              "Unknown error";
+            failedCount++;
+            const errMsg = getFulfillmentErrorMessage(err);
+            toast.error(errMsg, { autoClose: 7000 });
 
             await logFulfilledOrdersError([order], +status, errMsg);
           }
@@ -688,7 +697,11 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         completed: totalOrders
       }));
 
-      toast.success(`✅ DONE! All ${totalOrders} orders fulfilled.`);
+      if (failedCount > 0) {
+        toast.error(`❌ ${failedCount}/${totalOrders} fulfillments failed. Please check error logs.`);
+      } else {
+        toast.success(`✅ DONE! All ${totalOrders} orders fulfilled.`);
+      }
       setSelectedOrders({});
       setSelectionSummary("");
       
@@ -1574,7 +1587,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 2 });
             toast.success("Order fulfilled successfully!");
           } catch (error) {
-            toast.error("Failed to fulfill the order. Please try again.");
+            toast.error(getFulfillmentErrorMessage(error));
           } finally {
             setLoadingRows((prev) => ({ ...prev, [id]: false }));
           }
@@ -1592,7 +1605,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 9 });
             toast.success("Burger order fulfilled successfully!");
           } catch (error) {
-            toast.error("Failed to fulfill the burger order. Please try again.");
+            toast.error(getFulfillmentErrorMessage(error));
           } finally {
             setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: false }));
           }
@@ -1609,7 +1622,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 68 });
             toast.success("Merchize order fulfilled successfully!");
           } catch (error) {
-            toast.error("Failed to fulfill the Merchize order. Please try again.");
+            toast.error(getFulfillmentErrorMessage(error));
           } finally {
             setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: false }));
           }
@@ -1624,10 +1637,14 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           setLoadingRows((prev) => ({ ...prev, [`mango-${id}`]: true }));
 
           try {
-            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 69 });
-            toast.success("MangoPrint order fulfilled successfully!");
+            const response = await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 69 });
+            if (response.data?.status === 78 || response.data?.status?.id === 78) {
+              toast.error("MangoPrint fulfill failed. Please check logs.");
+            } else {
+              toast.success("MangoPrint order fulfilled successfully!");
+            }
           } catch (error) {
-            toast.error("Failed to fulfill the MangoPrint order. Please try again.");
+            toast.error(getFulfillmentErrorMessage(error));
           } finally {
             setLoadingRows((prev) => ({ ...prev, [`mango-${id}`]: false }));
           }
