@@ -14,6 +14,7 @@ type ActivityItem = {
   url: string;
   product_slug: string;
   catalog_slug: string;
+  product_image?: string;
   added_to_cart: boolean;
   cart_item_count: number;
   view_count: number;
@@ -54,6 +55,13 @@ const formatDateTime = (value: string) => {
   });
 };
 
+const getTodayDateValue = () => {
+  const today = new Date();
+  const timezoneOffset = today.getTimezoneOffset() * 60000;
+
+  return new Date(today.getTime() - timezoneOffset).toISOString().slice(0, 10);
+};
+
 const getDeviceLabel = (item: ActivityItem) => {
   const parts = [
     item.device?.device || "desktop",
@@ -64,6 +72,13 @@ const getDeviceLabel = (item: ActivityItem) => {
   return parts.join(" / ") || "--";
 };
 
+const getVisitorIpLabel = (ip?: string) => {
+  if (!ip) return "--";
+  if (ip.includes(":")) return "--";
+
+  return ip;
+};
+
 export default function ProductViewsPage() {
   const [data, setData] = useState<ActivityResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,6 +86,7 @@ export default function ProductViewsPage() {
   const [text, setText] = useState("");
   const [date, setDate] = useState("");
   const [added, setAdded] = useState("all");
+  const [hideHanoi, setHideHanoi] = useState(true);
   const [limit, setLimit] = useState(200);
 
   const loadActivity = async () => {
@@ -82,6 +98,7 @@ export default function ProductViewsPage() {
         limit: String(limit),
         page: "1",
         added,
+        hide_hanoi: hideHanoi ? "1" : "0",
       });
 
       if (text.trim()) params.set("text", text.trim());
@@ -104,7 +121,7 @@ export default function ProductViewsPage() {
 
   useEffect(() => {
     loadActivity();
-  }, [added, date, limit]);
+  }, [added, date, hideHanoi, limit]);
 
   const rows = data?.data || [];
   const addedCount = useMemo(() => rows.filter((item) => item.added_to_cart).length, [rows]);
@@ -166,6 +183,17 @@ export default function ProductViewsPage() {
             className="rounded border border-gray-300 px-3 py-2 text-sm"
           />
 
+          <button
+            onClick={() => setDate(getTodayDateValue())}
+            className={`rounded border px-4 py-2 text-sm font-medium ${
+              date === getTodayDateValue()
+                ? "border-blue-600 bg-blue-50 text-blue-700"
+                : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+            }`}
+          >
+            Today
+          </button>
+
           <select
             value={added}
             onChange={(event) => setAdded(event.target.value)}
@@ -185,6 +213,16 @@ export default function ProductViewsPage() {
             <option value={200}>200 rows</option>
             <option value={500}>500 rows</option>
           </select>
+
+          <label className="flex items-center gap-2 rounded border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700">
+            <input
+              type="checkbox"
+              checked={hideHanoi}
+              onChange={(event) => setHideHanoi(event.target.checked)}
+              className="h-4 w-4 rounded border-gray-300 text-blue-600"
+            />
+            Hide Hanoi test
+          </label>
 
           <button
             onClick={loadActivity}
@@ -221,15 +259,33 @@ export default function ProductViewsPage() {
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">
                       {formatDateTime(item.created_at)}
                     </td>
-                    <td className="min-w-[320px] px-4 py-3">
-                      <a
-                        href={item.url}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="font-medium text-blue-600 hover:underline"
-                      >
-                        {item.product_slug || item.url}
-                      </a>
+                    <td className="min-w-[360px] px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded border border-gray-200 bg-gray-50">
+                          {item.product_image ? (
+                            <img
+                              src={item.product_image}
+                              alt={item.product_slug || "Product"}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-xs text-gray-400">
+                              No img
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <a
+                            href={item.url}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="break-words font-medium text-blue-600 hover:underline"
+                          >
+                            {item.product_slug || item.url}
+                          </a>
+                          <div className="mt-1 break-all text-xs text-gray-400">{item.url}</div>
+                        </div>
+                      </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-700">
                       {item.catalog_slug || "--"}
@@ -252,7 +308,7 @@ export default function ProductViewsPage() {
                       {item.source}
                     </td>
                     <td className="whitespace-nowrap px-4 py-3 text-gray-600">
-                      <div>{item.ip || "--"}</div>
+                      <div>{getVisitorIpLabel(item.ip)}</div>
                       {item.location?.map_link ? (
                         <a
                           href={item.location.map_link}

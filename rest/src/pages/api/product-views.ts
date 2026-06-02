@@ -13,6 +13,13 @@ type ActivityRow = {
   updated_at: string;
 };
 
+type ProductImageRow = {
+  slug: string;
+  image: any;
+};
+
+const IMAGE_BASE_URL = "https://api.idreamshirt.com/images";
+
 const safeJsonParse = (value: any, fallback: any) => {
   if (!value) return fallback;
   if (typeof value !== "string") return value;
@@ -55,6 +62,49 @@ const normalizeCartItems = (cart: any): any[] => {
   return [];
 };
 
+const normalizeText = (value: any) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+
+const isHanoiLocation = (location: any) => {
+  const normalized = normalizeText([
+    location?.city,
+    location?.region,
+    location?.country,
+    location?.map_link,
+  ].filter(Boolean).join(" "));
+
+  return normalized.includes("hanoi") || normalized.includes("ha noi");
+};
+
+const buildProductImageUrl = (image: any) => {
+  const parsedImage = safeJsonParse(image, {});
+  const imagePath = parsedImage?.thumbnail || parsedImage?.original || "";
+
+  if (!imagePath) return "";
+  if (/^https?:\/\//i.test(imagePath)) return imagePath;
+
+  return `${IMAGE_BASE_URL}/${String(imagePath).replace(/^\/+/, "")}`;
+};
+
+const getProductImagesBySlug = async (slugs: string[]) => {
+  const uniqueSlugs = Array.from(new Set(slugs.filter(Boolean)));
+  if (!uniqueSlugs.length) return new Map<string, string>();
+
+  const placeholders = uniqueSlugs.map(() => "?").join(",");
+  const [rows]: any = await db.execute(
+    `SELECT slug, image FROM products WHERE slug IN (${placeholders})`,
+    uniqueSlugs
+  );
+
+  return (rows as ProductImageRow[]).reduce((map, row) => {
+    map.set(row.slug, buildProductImageUrl(row.image));
+    return map;
+  }, new Map<string, string>());
+};
+
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -71,6 +121,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     const text = String(req.query.text || "").trim();
     const added = String(req.query.added || "all");
     const date = String(req.query.date || "").trim();
+    const hideHanoi = String(req.query.hide_hanoi || "") === "1";
 
     const conditions = ["url LIKE ?"];
     const params: any[] = ["%/products/%"];
@@ -146,6 +197,20 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     } else if (added === "no") {
       data = data.filter((item) => !item.added_to_cart);
     }
+
+    if (hideHanoi) {
+      data = data.filter((item) => !isHanoiLocation(item.location));
+    }
+
+    const productImages = await getProductImagesBySlug(
+      data.map((item) => item.product_slug)
+    );
+
+    data = data.map((item) => ({
+      ...item,
+      product_image: productImages.get(item.product_slug) || "",
+    }));
+
     data = data.slice(0, limit);
 
     return res.status(200).json({
