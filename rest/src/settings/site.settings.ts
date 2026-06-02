@@ -73,6 +73,11 @@ export const siteSettings = {
         icon: "OrdersIcon",
       },
       {
+        href: ROUTES.PRODUCT_VIEWS,
+        label: "Product Views",
+        icon: "OrdersIcon",
+      },
+      {
         href: ROUTES.CUSTOMIZE_UPLOADS,
         label: "sidebar-nav-item-customize-uploads",
         icon: "CustomizeUploadsIcon",
