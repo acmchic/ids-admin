@@ -147,6 +147,7 @@ export default function EmailCampaigns() {
   const [contactsSource, setContactsSource] = useState("");
   const [extractLimit, setExtractLimit] = useState(300);
   const [testEmail, setTestEmail] = useState("acmchic88@gmail.com");
+  const [previewAsEmail, setPreviewAsEmail] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
   const [dryRunData, setDryRunData] = useState<string[] | null>(null);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
@@ -172,12 +173,13 @@ export default function EmailCampaigns() {
       const res = await fetch("/api/email-campaigns/action", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          id, 
-          action, 
+        body: JSON.stringify({
+          id,
+          action,
           limit: action === 'extract' ? extractLimit : undefined,
           batchSize: action === 'send' ? selectedPendingCount : undefined,
-          email: action === 'test' ? testEmail : undefined
+          email: action === 'test' ? testEmail : undefined,
+          previewAs: action === 'test' ? previewAsEmail : undefined,
         }),
       });
       const result = await res.json();
@@ -196,7 +198,8 @@ export default function EmailCampaigns() {
           if (action === 'send') setShowSendConfirm(false);
         }
       } else {
-        toast.error(result.error || `Action ${action} failed`);
+        const detail = result.details || result.stderr || "";
+        toast.error((result.error || `Action ${action} failed`) + (detail ? `: ${detail.slice(0, 200)}` : ""));
       }
     } catch (err) {
       toast.error("Network error executing action");
@@ -626,23 +629,30 @@ export default function EmailCampaigns() {
                   </div>
 
                   {/* Step 2: Test */}
-                  <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
-                    <div className="flex-1">
+                  <div className="flex flex-col gap-3 py-3 border-b border-gray-100">
+                    <div>
                       <p className="font-bold text-gray-700 text-sm">Step 2: Send Test Email</p>
-                      <p className="text-xs text-gray-500">Check how it looks in your own inbox first.</p>
+                      <p className="text-xs text-gray-500">Check how it looks in your inbox. Use "Preview as" to load a real customer's past products.</p>
                     </div>
-                    <div className="flex gap-2 flex-1">
-                      <input 
-                        type="email" 
-                        value={testEmail} 
+                    <div className="flex flex-col md:flex-row gap-2">
+                      <input
+                        type="email"
+                        value={testEmail}
                         onChange={(e) => setTestEmail(e.target.value)}
                         className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-purple-200 outline-none"
-                        placeholder="your-email@example.com"
+                        placeholder="Send test to: your@email.com"
                       />
-                      <button 
+                      <input
+                        type="email"
+                        value={previewAsEmail}
+                        onChange={(e) => setPreviewAsEmail(e.target.value)}
+                        className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-100 outline-none"
+                        placeholder="Preview as customer: customer@email.com (optional)"
+                      />
+                      <button
                         onClick={() => runAction(selectedCampaign.campaign.id, 'test')}
                         disabled={actionLoading}
-                        className="px-4 py-2 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-600 hover:text-white transition text-sm font-bold disabled:opacity-50"
+                        className="px-4 py-2 bg-purple-50 text-purple-600 border border-purple-200 rounded-lg hover:bg-purple-600 hover:text-white transition text-sm font-bold disabled:opacity-50 whitespace-nowrap"
                       >
                         {actionLoading ? "..." : "Send Test"}
                       </button>

@@ -51,7 +51,9 @@ export default async function handler(
     command = `php \"${artisanPath}\" campaign:send-batch ${campaignId} ${batchArg}`;
   } else if (action === "test") {
     const testEmail = req.body.email || "acmchic88@gmail.com";
-    command = `php \"${artisanPath}\" campaign:test ${campaignId} ${testEmail}`;
+    const previewAs = req.body.previewAs ? req.body.previewAs.trim() : "";
+    const previewArg = previewAs ? ` --preview-as=${previewAs}` : "";
+    command = `php \"${artisanPath}\" campaign:test ${campaignId} ${testEmail}${previewArg}`;
   } else if (action === "dry-run") {
     const batchArg = safeBatchSize ? `--batch-size=${safeBatchSize}` : "";
     command = `php \"${artisanPath}\" campaign:send-batch ${campaignId} ${batchArg} --dry-run`;
