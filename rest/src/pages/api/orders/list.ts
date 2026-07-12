@@ -1,6 +1,14 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { db } from '../../../config/database';
 
+const isCustomizeImageUrl = (imageUrl?: string | null): boolean => {
+  if (!imageUrl) return false;
+
+  const normalizedUrl = imageUrl.toLowerCase();
+  return normalizedUrl.includes('customize.idreamshirt.com')
+    || normalizedUrl.includes('/uploads/customize/');
+};
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -187,11 +195,31 @@ export default async function handler(
       const [products]: any = await db.execute(
         `SELECT 
           op.*,
-          p.name as product_name,
-          p.image as product_image,
-          p.slug as product_slug
+          CASE WHEN (op.is_customize = 1 OR op.customize_product_id IS NOT NULL OR op.customize_slug IS NOT NULL
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%customize.idreamshirt.com%'
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%/uploads/customize/%')
+            THEN pc.name ELSE p.name END as product_name,
+          CASE WHEN (op.is_customize = 1 OR op.customize_product_id IS NOT NULL OR op.customize_slug IS NOT NULL
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%customize.idreamshirt.com%'
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%/uploads/customize/%')
+            THEN pc.image ELSE p.image END as product_image,
+          CASE WHEN (op.is_customize = 1 OR op.customize_product_id IS NOT NULL OR op.customize_slug IS NOT NULL
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%customize.idreamshirt.com%'
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%/uploads/customize/%')
+            THEN pc.slug ELSE p.slug END as product_slug
         FROM order_product op
-        LEFT JOIN products p ON op.product_id = p.id
+        LEFT JOIN products p
+          ON op.is_customize = 0
+            AND op.customize_product_id IS NULL
+            AND op.customize_slug IS NULL
+            AND LOWER(COALESCE(op.img_url, '')) NOT LIKE '%customize.idreamshirt.com%'
+            AND LOWER(COALESCE(op.img_url, '')) NOT LIKE '%/uploads/customize/%'
+            AND op.product_id = p.id
+        LEFT JOIN products_customize pc
+          ON (op.is_customize = 1 OR op.customize_product_id IS NOT NULL OR op.customize_slug IS NOT NULL
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%customize.idreamshirt.com%'
+              OR LOWER(COALESCE(op.img_url, '')) LIKE '%/uploads/customize/%')
+            AND COALESCE(op.customize_product_id, op.product_id) = pc.id
         WHERE op.order_id IN (${placeholders})`,
         orderIds
       );
@@ -199,7 +227,7 @@ export default async function handler(
 
       // Parse variation JSON and map product fields
       const parsedProducts = products.map((p: any) => {
-        let variation = {};
+        let variation: any = {};
         if (p.variation && typeof p.variation === 'string') {
           try {
             variation = JSON.parse(p.variation);
@@ -212,27 +240,42 @@ export default async function handler(
         }
         
         // Map product fields from join or variation - always ensure name exists
+        const isCustomize = Number(p.is_customize) === 1
+          || Boolean(p.customize_product_id)
+          || Boolean(p.customize_slug)
+          || isCustomizeImageUrl(p.img_url);
         const productName = p.product_name || variation?.name || 'Unknown Product';
         const productImage = p.product_image || variation?.image || null;
         const productSlug = p.product_slug || '';
         
         // Return simplified structure with only needed fields
         return {
+          // Keep `id` as the order-product id for issue/variation flows.
+          // The catalog id is available separately as `product_id`.
           id: String(p.id),
+          order_product_id: String(p.id),
           order_id: String(p.order_id),
           product_id: p.product_id ? String(p.product_id) : null,
           name: productName, // Always has a value
           slug: productSlug,
           image: productImage,
           img_url: p.img_url,
-          is_customize: p.is_customize || 0,
+          is_customize: isCustomize ? 1 : 0,
+          customize_slug: p.customize_slug || null,
+          customize_product_id: p.customize_product_id ? String(p.customize_product_id) : null,
+          artwork_file_name: p.artwork_file_name || null,
+          design_url: p.design_url || null,
+          design_snapshot: p.design_snapshot || null,
           impressions: p.impressions || 0,
           clicks: p.clicks || 0,
           // Keep pivot structure for compatibility
           pivot: {
             img_url: p.img_url,
             variation: variation,
-            upscayl_image: p.upscayl_image || null
+            upscayl_image: p.upscayl_image || null,
+            customize_slug: p.customize_slug || null,
+            customize_product_id: p.customize_product_id ? String(p.customize_product_id) : null,
+            design_url: p.design_url || null
           }
         };
       });
@@ -299,4 +342,3 @@ export default async function handler(
     });
   }
 }
-

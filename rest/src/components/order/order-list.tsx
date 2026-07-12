@@ -189,13 +189,52 @@ const buildCustomizeImageUrlFromPath = (imagePath?: string): string | null => {
   return normalizedPath ? `https://customize.idreamshirt.com/uploads/customize/${normalizedPath}` : null;
 };
 
+const isCustomizeImageUrl = (imageUrl?: string): boolean => {
+  if (!imageUrl) return false;
+
+  const normalizedUrl = imageUrl.toLowerCase();
+  return normalizedUrl.includes("customize.idreamshirt.com")
+    || normalizedUrl.includes("/uploads/customize/");
+};
+
+const isUploadedCustomizeImageUrl = (imageUrl?: string): boolean =>
+  Boolean(imageUrl && imageUrl.toLowerCase().includes("/uploads/customize/"));
+
+const appendImageCacheBuster = (imageUrl: string, cacheBuster?: number): string => {
+  if (!imageUrl || !cacheBuster) return imageUrl;
+
+  return `${imageUrl}${imageUrl.includes("?") ? "&" : "?"}v=${cacheBuster}`;
+};
 
 const buildCustomizeImageUrl = (product: any): string | null => {
-  const images = parseImageData(product?.image);
-  if (images?.[0]?.original) {
-    return buildCustomizeImageUrlFromPath(images[0].original);
+  if (isUploadedCustomizeImageUrl(product?.customize_artwork_url)) {
+    return product.customize_artwork_url;
   }
-  return null;
+
+  const productImageUrl = product?.pivot?.img_url || product?.img_url;
+  if (isUploadedCustomizeImageUrl(productImageUrl)) {
+    return productImageUrl;
+  }
+
+  const images = parseImageData(product?.image);
+  const imagePath = images?.[0]?.original
+    || images?.original
+    || images?.url
+    || images?.path
+    || product?.design_url
+    || product?.pivot?.design_url;
+  const imagePathLooksCustomize = String(imagePath || "").toLowerCase().includes("customize");
+  const productIsMarkedCustomize = product?.is_customize === 1
+    || product?.is_customize === true
+    || Boolean(product?.customize_product_id || product?.pivot?.customize_product_id)
+    || Boolean(product?.customize_slug || product?.pivot?.customize_slug)
+    || String(product?.slug || "").startsWith("customize-");
+
+  if (!imagePathLooksCustomize && !productIsMarkedCustomize) {
+    return null;
+  }
+
+  return buildCustomizeImageUrlFromPath(imagePath);
 };
 
 const buildRegularProductImageUrls = (product: any): { display: string; link: string } => {
@@ -406,6 +445,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   const [selectedOrders, setSelectedOrders] = useState<Record<string, number>>({});
   const [sortingObj, setSortingObj] = useState<{ sort: SortOrder; column: string | null }>({ sort: SortOrder.Desc, column: null });
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
+  const [imageCacheBusters, setImageCacheBusters] = useState<Record<string, number>>({});
+  // A new page load must also use a new URL so stale CDN/browser entries are
+  // not reused after the underlying artwork file has been overwritten.
+  const [pageImageCacheBuster] = useState(() => Date.now());
   const [selectionSummary, setSelectionSummary] = useState<string>("");
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   
@@ -794,8 +837,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       const result = await response.json();
 
       if (response.ok) {
+        // The remote file is overwritten at the same URL. Change the URL
+        // query string so Next/Image and the CDN cannot reuse the old image.
+        setImageCacheBusters(prev => ({ ...prev, [productId]: Date.now() }));
         toast.success('Upload thành công! Đã thay thế ảnh artwork.');
-        // Không reload trang, chỉ show thông báo thành công
       } else {
         console.error('❌ Upload failed:', result);
         toast.error(`Upload thất bại: ${result.error || result.details || 'Lỗi không xác định'}`);
@@ -814,6 +859,56 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         fileInputRefs.current[uploadKey]!.value = '';
       }
     }
+  };
+
+  const getProductUploadKey = (product: any): string => {
+    const productIdentifier = product.order_product_id || product.id || product.product_id;
+    return `${product.order_id || "order"}-${productIdentifier}`;
+  };
+
+  const renderProductImageUploadButton = (product: any, sourceUrl: string) => {
+    if (!sourceUrl) return null;
+
+    const uploadTarget = getUploadTargetFromUrl(sourceUrl);
+    const productKey = getProductUploadKey(product);
+    const uploadKey = `${productKey}-image`;
+    const isUploading = Boolean(uploadingImages[uploadKey]);
+
+    const handleClickUpload = () => {
+      if (isUploading) return;
+
+      const input = document.createElement("input");
+      input.type = "file";
+      input.accept = "image/*";
+      input.onchange = (event) => {
+        void handleImageUpload(
+          event as any,
+          productKey,
+          uploadTarget.imagePath,
+          uploadTarget.fileName,
+          uploadTarget.storage
+        );
+        input.remove();
+      };
+      document.body.appendChild(input);
+      input.click();
+    };
+
+    return (
+      <Button
+        onClick={handleClickUpload}
+        disabled={isUploading}
+        variant="outline"
+        size="small"
+        title="Replace this product image"
+      >
+        {isUploading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <UploadCloud className="h-4 w-4" />
+        )}
+      </Button>
+    );
   };
 
 
@@ -1088,6 +1183,14 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             const color = variant?.color ?? "";
             const size = variant?.size ?? "";
             const side = variant?.side ?? "";
+            const customizeSlug = product.customize_slug || product.pivot?.customize_slug;
+            const imageIsCustomize = isCustomizeImageUrl(product.pivot?.img_url || product.img_url);
+            const isCustomizeProduct = product.is_customize === 1
+              || product.is_customize === true
+              || Boolean(product.customize_product_id || product.pivot?.customize_product_id)
+              || Boolean(customizeSlug)
+              || imageIsCustomize
+              || String(product.slug || "").startsWith("customize-");
 
             return (
               <div key={`${product.id}-${index}`} className="mb-2 text-center">
@@ -1115,7 +1218,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 <p
                   className="mt-1 text-sm cursor-pointer text-blue-500 hover:underline"
                   onClick={() => {
-                    const productSlug = normalizeProductSlugForUrl(product.slug);
+                    const rawSlug = customizeSlug || product.slug || "";
+                    const productSlug = normalizeProductSlugForUrl(
+                      isCustomizeProduct && !rawSlug.startsWith("customize-")
+                        ? `customize-${rawSlug}`
+                        : rawSlug
+                    );
                     if (productSlug) {
                       window.open(
                         `https://idreamshirt.com/products/${productSlug}/${variantName}-${nameToSlug(color)}-size_${size}`,
@@ -1228,24 +1336,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
     /** ===============================
      *  🔧 Helper functions (Memoized)
      *  =============================== */
-    const parseImageData = (imgData: any): any => {
-      if (!imgData) return null;
-      if (typeof imgData === "string") {
-        try {
-          return JSON.parse(imgData);
-        } catch {
-          return null;
-        }
-      }
-      return imgData;
-    };
-
-    const buildCustomizeImageUrl = (product: any): string | null => {
-      const images = parseImageData(product.image);
-      if (images?.[0]?.original) return buildCustomizeImageUrlFromPath(images[0].original);
-      return null;
-    };
-
     const buildRegularImageUrls = (product: any): { display: string; link: string } => {
       const baseUrl = product.img_url || product.pivot?.img_url || "";
       if (!baseUrl) return { display: "", link: "" };
@@ -1280,8 +1370,14 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           let displayImgUrl = "";
           let linkUrl = "";
           let isCustomize = false;
+          const isCustomizeProduct = product.is_customize === 1
+            || product.is_customize === true
+            || Boolean(product.customize_product_id)
+            || Boolean(product.customize_slug)
+            || isCustomizeImageUrl(product.pivot?.img_url || product.img_url)
+            || String(product.slug || "").startsWith("customize-");
 
-          if (product.is_customize && product.image) {
+          if (isCustomizeProduct) {
             const url = buildCustomizeImageUrl(product);
             if (url) {
               displayImgUrl = url;
@@ -1290,14 +1386,18 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             }
           }
 
-          if (!displayImgUrl) {
+          if (!displayImgUrl && !isCustomizeProduct) {
             const { display, link } = buildRegularImageUrls(product);
             displayImgUrl = display;
             linkUrl = link;
           }
 
           const folderPath = getFolderPath(displayImgUrl);
-          const isCustomizeProduct = product.is_customize === 1 || product.is_customize === true || isCustomize;
+          const hasCustomizeArtwork = isCustomize || isCustomizeProduct;
+          const productKey = getProductUploadKey(product);
+          const cacheBuster = imageCacheBusters[productKey] || pageImageCacheBuster;
+          const displayImageSrc = appendImageCacheBuster(displayImgUrl, cacheBuster);
+          const imageLinkUrl = appendImageCacheBuster(linkUrl, cacheBuster);
 
           if (!displayImgUrl) {
             return (
@@ -1313,10 +1413,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
             <div
               key={`${product.id}-${index}`}
               className={`mb-2 text-center p-2 rounded ${
-                isCustomizeProduct ? "bg-yellow-100 border-2 border-yellow-400" : ""
+                hasCustomizeArtwork ? "bg-yellow-100 border-2 border-yellow-400" : ""
               }`}
             >
-              {isCustomizeProduct && (
+              {hasCustomizeArtwork && (
                 <div className="mb-1">
                   <span className="inline-block px-3 py-1 bg-yellow-500 text-white text-xs font-bold rounded shadow-md">
                     CUSTOMIZE
@@ -1326,9 +1426,9 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
               <div className="inline-block transition-transform transform relative">
                 {/* 🧠 Next/Image tự cache theo src → không gọi lại server khi src không đổi */}
-                <a href={linkUrl} target="_blank" rel="noopener noreferrer">
+                <a href={imageLinkUrl} target="_blank" rel="noopener noreferrer">
                   <Image
-                    src={displayImgUrl}
+                    src={displayImageSrc}
                     alt={product.name || "Product image"}
                     width={130}
                     height={150}
@@ -1341,7 +1441,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
               {/* 🔗 Image path */}
               <a
-                href={linkUrl}
+                href={imageLinkUrl}
                 target="_blank"
                 rel="noopener noreferrer"
                 className={`block mt-1 text-xs font-mono ${
@@ -1352,6 +1452,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
               >
                 {folderPath.toUpperCase()}
               </a>
+
+              <div className="mt-1 flex justify-center">
+                {renderProductImageUploadButton(product, linkUrl || displayImgUrl)}
+              </div>
             </div>
           );
         })}
@@ -1377,45 +1481,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
       onHeaderCell: () => onHeaderClick("total"),
       render: (total: number, record: any) => {
         const discount = record.discount || 0;
-        const firstProduct = record.products?.[0];
-        let displayImgUrl = "";
-        let isCustomizeImage = false;
-
-        if (firstProduct) {
-          const customizeUrl = buildCustomizeImageUrl(firstProduct);
-          if (customizeUrl) {
-            displayImgUrl = customizeUrl;
-            isCustomizeImage = true;
-          } else {
-            displayImgUrl = buildRegularProductImageUrls(firstProduct).display;
-          }
-        }
-
-        const uploadKey = firstProduct ? `${firstProduct.id}-image` : undefined;
-        const originalLink = firstProduct ? buildRegularProductImageUrls(firstProduct).link || displayImgUrl : displayImgUrl;
-        const uploadTarget = getUploadTargetFromUrl(isCustomizeImage ? displayImgUrl : originalLink);
-        const imagePath = uploadTarget.imagePath;
-        const fileName = uploadTarget.fileName;
-        const isUploading = uploadKey ? Boolean(uploadingImages[uploadKey]) : false;
-
-        const handleClickUpload = () => {
-          if (!firstProduct || !uploadKey) return;
-          const proxyKey = `${firstProduct.id}-image`;
-          if (fileInputRefs.current[proxyKey]) {
-            fileInputRefs.current[proxyKey]?.click();
-            return;
-          }
-
-          const input = document.createElement("input");
-          input.type = "file";
-          input.accept = "image/*";
-          input.onchange = (event) => {
-            handleImageUpload(event as any, firstProduct.id.toString(), imagePath, fileName, uploadTarget.storage);
-            document.body.removeChild(input);
-          };
-          document.body.appendChild(input);
-          input.click();
-        };
 
         return (
           <div className="flex flex-col items-center gap-2">
@@ -1425,20 +1490,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
                 <span className="text-red-500"> ({discount.toFixed(2)})</span>
               )}
             </span>
-            {displayImgUrl && (
-              <Button
-                onClick={handleClickUpload}
-                disabled={isUploading}
-                variant="outline"
-                size="small"
-              >
-                {isUploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <UploadCloud className="h-4 w-4" />
-                )}
-              </Button>
-            )}
           </div>
         );
       },

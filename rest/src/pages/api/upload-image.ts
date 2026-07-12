@@ -174,8 +174,20 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
     const sshKeyPath = process.env.SSH_PRIVATE_KEY_PATH || '/root/.ssh/id_rsa';
     const sshPrefix = `${remoteUser}@${remoteHost}`;
 
-    // Skip mkdir - just upload file directly
-    console.log('Skipping mkdir - uploading file directly to:', normalizedPath);
+    // Create the target directory before uploading. Customize uploads are
+    // grouped by month (for example, 2026_07), so a new month may not exist
+    // on the remote server yet.
+    const remoteDirectory = path.posix.dirname(normalizedPath);
+    if (remoteDirectory !== remoteFolder && !remoteDirectory.startsWith(`${remoteFolder}/`)) {
+      return sendResponse(400, { error: 'Invalid remote directory' });
+    }
+
+    const mkdirCommand = `ssh -i '${sshKeyPath}' ${sshPrefix} 'mkdir -p "${remoteDirectory}" && test -d "${remoteDirectory}" && echo "exists"'`;
+    console.log('Ensuring upload directory exists:', remoteDirectory);
+    const { stdout: mkdirResult } = await execAsync(mkdirCommand);
+    if (!mkdirResult.includes('exists')) {
+      throw new Error('Target directory could not be created');
+    }
 
     // PRODUCTION SECURITY: SAFE FILE UPLOAD with validation
     const scpCommand = `scp -i '${sshKeyPath}' "${file.filepath}" ${sshPrefix}:${normalizedPath}`;
