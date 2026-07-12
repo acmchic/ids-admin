@@ -1628,11 +1628,6 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
 
         const orderHasOpenTicket = hasOpenTicket(id);
         const premiumTshirtCode = premiumTshirtCodes[String(id)] || '3001';
-        const hasPremiumTshirt = (row.products || []).some((product: any) => {
-          const variation = parseVariation(product.pivot?.variation || product.variation);
-          const productName = variation?.name || product.name || '';
-          return String(productName).toLowerCase().includes('premium t-shirt');
-        });
 
         const handleFulfill = async () => {
           if (orderHasOpenTicket) {
@@ -1725,26 +1720,23 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
             <div className="flex flex-col items-center gap-2">
-              {hasPremiumTshirt && (
-                <label className="flex items-center gap-1 text-xs text-gray-700">
-                  <span>Premium T-Shirt:</span>
-                  <select
-                    value={premiumTshirtCode}
-                    onChange={(event) => {
-                      const value = event.target.value === '1717' ? '1717' : '3001';
-                      setPremiumTshirtCodes((previous) => ({
-                        ...previous,
-                        [String(id)]: value,
-                      }));
-                    }}
-                    className="rounded border border-gray-300 bg-white px-1 py-0.5 text-xs"
-                    title="Chọn mã áo Premium T-Shirt khi fulfill"
-                  >
-                    <option value="3001">3001 (Default)</option>
-                    <option value="1717">1717</option>
-                  </select>
-                </label>
-              )}
+              <label className="flex items-center">
+                <select
+                  value={premiumTshirtCode}
+                  onChange={(event) => {
+                    const value = event.target.value === '1717' ? '1717' : '3001';
+                    setPremiumTshirtCodes((previous) => ({
+                      ...previous,
+                      [String(id)]: value,
+                    }));
+                  }}
+                  className="rounded border border-gray-300 bg-white px-1 py-0.5 text-sm"
+                  title="Chọn mã áo Premium T-Shirt khi fulfill"
+                >
+                  <option value="3001">3001</option>
+                  <option value="1717">1717</option>
+                </select>
+              </label>
 
               {/* CUSTOMIZE Badge */}
               {isCustomizeOrder(row) && (
