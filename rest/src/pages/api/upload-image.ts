@@ -135,7 +135,10 @@ export default async function handler(req: UploadRequest, res: NextApiResponse) 
 
     // SAFE PATH CONSTRUCTION - Prevent any directory manipulation
     let remoteFolder = requestedStorage === 'customize'
-      ? (process.env.SCP_CUSTOMIZE_REMOTE_FOLDER || '/home/production/image-server/customize')
+      // image-server loads IMAGE_BASE_PATH=customize relative to
+      // /home/production/image-server, which resolves to this sibling path.
+      // Keep uploads in the same directory that /uploads/customize serves.
+      ? (process.env.SCP_CUSTOMIZE_REMOTE_FOLDER || '/home/production/customize')
       : (process.env.SCP_REMOTE_FOLDER || '/home/images_ids/images');
     // Ensure remoteFolder starts with /
     if (!remoteFolder.startsWith('/')) {

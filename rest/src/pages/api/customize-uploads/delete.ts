@@ -46,7 +46,9 @@ const safeJsonParse = (value: any): any[] => {
 };
 
 const normalizeRemoteFolder = () => {
-  let remoteFolder = process.env.SCP_CUSTOMIZE_REMOTE_FOLDER || "/home/production/image-server/customize";
+  // Keep this in sync with image-server's IMAGE_BASE_PATH=customize,
+  // which resolves to /home/production/customize on the production host.
+  let remoteFolder = process.env.SCP_CUSTOMIZE_REMOTE_FOLDER || "/home/production/customize";
   if (!remoteFolder.startsWith("/")) remoteFolder = `/${remoteFolder}`;
   return remoteFolder.replace(/\/$/, "");
 };
