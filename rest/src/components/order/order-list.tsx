@@ -443,6 +443,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
   
   const [loadingRows, setLoadingRows] = useState<Record<string, boolean>>({});
   const [selectedOrders, setSelectedOrders] = useState<Record<string, number>>({});
+  const [premiumTshirtCodes, setPremiumTshirtCodes] = useState<Record<string, '3001' | '1717'>>({});
   const [sortingObj, setSortingObj] = useState<{ sort: SortOrder; column: string | null }>({ sort: SortOrder.Desc, column: null });
   const [uploadingImages, setUploadingImages] = useState<Record<string, boolean>>({});
   const [imageCacheBusters, setImageCacheBusters] = useState<Record<string, number>>({});
@@ -711,6 +712,7 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           try {
             await axios.put(`https://orders.idreamshirt.com/orders/${order.id}`, {
               status: +status,
+              premium_tshirt_code: premiumTshirtCodes[String(order.id)] || '3001',
             });
             await logFulfilledOrders([order], +status);
           } catch (err: any) {
@@ -1625,6 +1627,12 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
         if (!id) return null;
 
         const orderHasOpenTicket = hasOpenTicket(id);
+        const premiumTshirtCode = premiumTshirtCodes[String(id)] || '3001';
+        const hasPremiumTshirt = (row.products || []).some((product: any) => {
+          const variation = parseVariation(product.pivot?.variation || product.variation);
+          const productName = variation?.name || product.name || '';
+          return String(productName).toLowerCase().includes('premium t-shirt');
+        });
 
         const handleFulfill = async () => {
           if (orderHasOpenTicket) {
@@ -1635,7 +1643,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           setLoadingRows((prev) => ({ ...prev, [id]: true }));
 
           try {
-            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 2 });
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, {
+              status: 2,
+              premium_tshirt_code: premiumTshirtCode,
+            });
             toast.success("Order fulfilled successfully!");
           } catch (error) {
             toast.error(getFulfillmentErrorMessage(error));
@@ -1653,7 +1664,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           setLoadingRows((prev) => ({ ...prev, [`burger-${id}`]: true }));
 
           try {
-            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 9 });
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, {
+              status: 9,
+              premium_tshirt_code: premiumTshirtCode,
+            });
             toast.success("Burger order fulfilled successfully!");
           } catch (error) {
             toast.error(getFulfillmentErrorMessage(error));
@@ -1670,7 +1684,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           setLoadingRows((prev) => ({ ...prev, [`merchize-${id}`]: true }));
 
           try {
-            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 68 });
+            await axios.put(`https://orders.idreamshirt.com/orders/${id}`, {
+              status: 68,
+              premium_tshirt_code: premiumTshirtCode,
+            });
             toast.success("Merchize order fulfilled successfully!");
           } catch (error) {
             toast.error(getFulfillmentErrorMessage(error));
@@ -1688,7 +1705,10 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           setLoadingRows((prev) => ({ ...prev, [`mango-${id}`]: true }));
 
           try {
-            const response = await axios.put(`https://orders.idreamshirt.com/orders/${id}`, { status: 69 });
+            const response = await axios.put(`https://orders.idreamshirt.com/orders/${id}`, {
+              status: 69,
+              premium_tshirt_code: premiumTshirtCode,
+            });
             if (response.data?.status === 78 || response.data?.status?.id === 78) {
               toast.error("MangoPrint fulfill failed. Please check logs.");
             } else {
@@ -1705,6 +1725,27 @@ const OrderList = ({ orders, onPagination, onSort, onOrder }: IProps) => {
           <>
             <ActionButtons id={id} detailsUrl={`${router.asPath}/${id}`} />
             <div className="flex flex-col items-center gap-2">
+              {hasPremiumTshirt && (
+                <label className="flex items-center gap-1 text-xs text-gray-700">
+                  <span>Premium T-Shirt:</span>
+                  <select
+                    value={premiumTshirtCode}
+                    onChange={(event) => {
+                      const value = event.target.value === '1717' ? '1717' : '3001';
+                      setPremiumTshirtCodes((previous) => ({
+                        ...previous,
+                        [String(id)]: value,
+                      }));
+                    }}
+                    className="rounded border border-gray-300 bg-white px-1 py-0.5 text-xs"
+                    title="Chọn mã áo Premium T-Shirt khi fulfill"
+                  >
+                    <option value="3001">3001 (Default)</option>
+                    <option value="1717">1717</option>
+                  </select>
+                </label>
+              )}
+
               {/* CUSTOMIZE Badge */}
               {isCustomizeOrder(row) && (
                 <div className="mb-2">
