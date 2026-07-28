@@ -3,6 +3,13 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+function jsonSafe<T>(value: T): T {
+  return JSON.parse(JSON.stringify(
+    value,
+    (_key, item) => typeof item === "bigint" ? Number(item) : item
+  ));
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -43,7 +50,7 @@ export default async function handler(
 
       // Get recent recipients (last 50)
       const recentRecipients: any[] = await prisma.$queryRaw`
-        SELECT id, email, name, status, error_message, sent_at
+        SELECT id, email, name, status, error_message, sent_at, opened_at, clicked_at, click_count
         FROM email_campaign_recipients 
         WHERE campaign_id = ${campaignId}
         ORDER BY 
@@ -65,6 +72,34 @@ export default async function handler(
         LIMIT 50
       `;
 
+      const engagement: any[] = await prisma.$queryRaw`
+        SELECT
+          COUNT(DISTINCT CASE WHEN opened_at IS NOT NULL THEN id END) as unique_opens,
+          COUNT(DISTINCT CASE WHEN clicked_at IS NOT NULL THEN id END) as unique_clicks,
+          COALESCE(SUM(click_count), 0) as total_clicks
+        FROM email_campaign_recipients
+        WHERE campaign_id = ${campaignId}
+      `;
+
+      const attribution: any[] = await prisma.$queryRaw`
+        SELECT
+          COUNT(*) as orders,
+          COALESCE(SUM(paid_total), 0) as revenue,
+          COALESCE(AVG(paid_total), 0) as aov
+        FROM orders
+        WHERE email_campaign_id = ${campaignId}
+          AND payment_status = 'COMPLETED'
+          AND deleted_at IS NULL
+      `;
+
+      const links: any[] = await prisma.$queryRaw`
+        SELECT link_key, COUNT(*) as clicks, COUNT(DISTINCT recipient_id) as unique_clicks
+        FROM email_campaign_clicks
+        WHERE campaign_id = ${campaignId}
+        GROUP BY link_key
+        ORDER BY clicks DESC
+      `;
+
       const safeStats = stats.map((s: any) => ({
         status: s.status,
         count: Number(s.count),
@@ -80,7 +115,7 @@ export default async function handler(
         id: Number(r.id),
       }));
 
-      return res.status(200).json({
+      return res.status(200).json(jsonSafe({
         campaign: {
           ...campaign,
           id: Number(campaign.id),
@@ -88,12 +123,28 @@ export default async function handler(
           sent_count: Number(campaign.sent_count),
           failed_count: Number(campaign.failed_count),
           opened_count: Number(campaign.opened_count),
+          clicked_count: Number(campaign.clicked_count),
           batch_size: Number(campaign.batch_size),
         },
         stats: safeStats,
         recentRecipients: safeRecipients,
         failedRecipients: safeFailedRecipients,
-      });
+        engagement: {
+          uniqueOpens: Number(engagement[0]?.unique_opens || 0),
+          uniqueClicks: Number(engagement[0]?.unique_clicks || 0),
+          totalClicks: Number(engagement[0]?.total_clicks || 0),
+        },
+        attribution: {
+          orders: Number(attribution[0]?.orders || 0),
+          revenue: Number(attribution[0]?.revenue || 0),
+          aov: Number(attribution[0]?.aov || 0),
+        },
+        links: links.map((link: any) => ({
+          linkKey: link.link_key,
+          clicks: Number(link.clicks),
+          uniqueClicks: Number(link.unique_clicks),
+        })),
+      }));
     } catch (error: any) {
       console.error("Campaign detail API error:", error);
       return res.status(500).json({ error: error.message });

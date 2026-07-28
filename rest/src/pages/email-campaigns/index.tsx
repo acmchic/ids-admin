@@ -1,7 +1,6 @@
 import Card from "@components/common/card";
 import Layout from "@components/layouts/admin";
 import { useState, useEffect, useCallback } from "react";
-import { useTranslation } from "next-i18next";
 import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { adminOnly } from "@utils/auth-utils";
 import Loader from "@components/ui/loader/loader";
@@ -19,6 +18,10 @@ type Campaign = {
   pending_count: number;
   failed_count: number;
   opened_count: number;
+  clicked_count: number;
+  total_clicks: number;
+  attributed_orders: number;
+  attributed_revenue: number;
   batch_size: number;
   started_at: string | null;
   completed_at: string | null;
@@ -30,12 +33,30 @@ type CampaignDetail = {
   stats: { status: string; count: number }[];
   recentRecipients: any[];
   failedRecipients: any[];
+  engagement: {
+    uniqueOpens: number;
+    uniqueClicks: number;
+    totalClicks: number;
+  };
+  attribution: {
+    orders: number;
+    revenue: number;
+    aov: number;
+  };
+  links: {
+    linkKey: string;
+    clicks: number;
+    uniqueClicks: number;
+  }[];
 };
 
 type OverviewData = {
   campaigns: Campaign[];
   unsubscribeCount: number;
   totalOrderEmails: number;
+  testMode: boolean;
+  allowedTestRecipients: string;
+  allowedTestDomains: string;
 };
 
 type Contact = {
@@ -50,6 +71,8 @@ type Contact = {
   first_order_at: string | null;
   last_order_at: string | null;
   tags: string[] | null;
+  sent_count: number;
+  last_sent_at: string | null;
   created_at: string | null;
 };
 
@@ -121,7 +144,6 @@ function StatCard({ label, value, icon, color }: { label: string; value: string 
 }
 
 export default function EmailCampaigns() {
-  const { t } = useTranslation();
   const [activeTab, setActiveTab] = useState<"campaigns" | "contacts">("campaigns");
   const [data, setData] = useState<OverviewData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -478,6 +500,14 @@ export default function EmailCampaigns() {
       {/* ==================== CAMPAIGNS TAB ==================== */}
       {activeTab === "campaigns" && (
         <>
+          {data?.testMode && (
+            <div className="mb-6 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-bold">Campaign test mode is active</p>
+              <p className="mt-1">
+                Real campaign dispatch is locked. Test destinations: {data.allowedTestRecipients} and *@{data.allowedTestDomains}.
+              </p>
+            </div>
+          )}
           {/* Overview Stats */}
           <Card className="p-6 mb-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -508,6 +538,10 @@ export default function EmailCampaigns() {
                       <th className="text-left p-3 font-semibold text-gray-600">Status</th>
                       <th className="text-left p-3 font-semibold text-gray-600">Progress</th>
                       <th className="text-right p-3 font-semibold text-gray-600">Sent</th>
+                      <th className="text-right p-3 font-semibold text-gray-600">Opens</th>
+                      <th className="text-right p-3 font-semibold text-gray-600">Clicks</th>
+                      <th className="text-right p-3 font-semibold text-gray-600">Orders</th>
+                      <th className="text-right p-3 font-semibold text-gray-600">Revenue</th>
                       <th className="text-right p-3 font-semibold text-gray-600">Failed</th>
                       <th className="text-right p-3 font-semibold text-gray-600">Total</th>
                       <th className="text-left p-3 font-semibold text-gray-600">Created</th>
@@ -538,6 +572,17 @@ export default function EmailCampaigns() {
                             <p className="text-xs text-gray-500 mt-1">{progress}%</p>
                           </td>
                           <td className="p-3 text-right font-mono text-green-600 font-semibold">{campaign.sent_count.toLocaleString()}</td>
+                          <td className="p-3 text-right font-mono text-blue-600 font-semibold">{campaign.opened_count.toLocaleString()}</td>
+                          <td className="p-3 text-right font-mono text-indigo-600 font-semibold">
+                            {campaign.clicked_count.toLocaleString()}
+                            {campaign.total_clicks > campaign.clicked_count && (
+                              <span className="block text-[10px] font-normal text-gray-400">{campaign.total_clicks.toLocaleString()} total</span>
+                            )}
+                          </td>
+                          <td className="p-3 text-right font-mono font-semibold">{campaign.attributed_orders.toLocaleString()}</td>
+                          <td className="p-3 text-right font-mono text-green-700 font-semibold">
+                            ${campaign.attributed_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </td>
                           <td className="p-3 text-right font-mono text-red-500 font-semibold">{campaign.failed_count.toLocaleString()}</td>
                           <td className="p-3 text-right font-mono font-semibold">{campaign.total_recipients.toLocaleString()}</td>
                           <td className="p-3 text-gray-500 text-xs">{campaign.created_at ? new Date(campaign.created_at).toLocaleDateString() : "-"}</td>
@@ -594,6 +639,19 @@ export default function EmailCampaigns() {
                     <p className="text-sm font-medium capitalize">{stat.status}</p>
                   </div>
                 ))}
+              </div>
+
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                <StatCard label="Unique opens" value={selectedCampaign.engagement.uniqueOpens} icon="O" color="bg-blue-50 border-blue-200" />
+                <StatCard label="Unique clicks" value={selectedCampaign.engagement.uniqueClicks} icon="C" color="bg-indigo-50 border-indigo-200" />
+                <StatCard label="Total clicks" value={selectedCampaign.engagement.totalClicks} icon="#" color="bg-gray-50 border-gray-200" />
+                <StatCard label="Orders" value={selectedCampaign.attribution.orders} icon="O" color="bg-green-50 border-green-200" />
+                <StatCard
+                  label="Revenue"
+                  value={`$${selectedCampaign.attribution.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                  icon="$"
+                  color="bg-green-50 border-green-200"
+                />
               </div>
 
               {/* Action Buttons */}
@@ -676,10 +734,11 @@ export default function EmailCampaigns() {
                         </button>
                         <button 
                           onClick={() => setShowSendConfirm(true)}
-                          disabled={actionLoading || selectedPendingCount === 0}
+                          disabled={actionLoading || selectedPendingCount === 0 || Boolean(data?.testMode)}
                           className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-extrabold shadow-md hover:shadow-lg disabled:opacity-50"
+                          title={data?.testMode ? "Real sending is locked in campaign test mode" : undefined}
                         >
-                           🚀 Start Sending
+                           {data?.testMode ? "Sending Locked" : "Start Sending"}
                         </button>
                       </div>
                       
@@ -697,7 +756,7 @@ export default function EmailCampaigns() {
               </div>
 
               {/* Confirmation Modal */}
-              {showSendConfirm && (
+              {showSendConfirm && !data?.testMode && (
                 <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                   <div className="bg-white rounded-2xl p-8 max-w-sm w-full shadow-2xl border border-red-100">
                     <div className="text-center mb-6">
@@ -744,7 +803,7 @@ export default function EmailCampaigns() {
                 <h3 className="text-sm font-bold text-gray-700 mb-2">📋 Recipients (last 100)</h3>
                 <div className="max-h-96 overflow-y-auto border rounded-lg">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th></tr></thead>
+                    <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th><th className="text-left p-2">Opened</th><th className="text-left p-2">Clicks</th></tr></thead>
                     <tbody>
                       {selectedCampaign.recentRecipients.map((r: any) => (
                         <tr key={r.id} className="border-b hover:bg-gray-50">
@@ -754,6 +813,8 @@ export default function EmailCampaigns() {
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${recipientStatusColors[r.status] || "bg-gray-100"}`}>{r.status}</span>
                           </td>
                           <td className="p-2 text-gray-500">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "-"}</td>
+                          <td className="p-2 text-gray-500">{r.opened_at ? new Date(r.opened_at).toLocaleString() : "-"}</td>
+                          <td className="p-2 font-mono">{r.click_count || 0}</td>
                         </tr>
                       ))}
                     </tbody>
