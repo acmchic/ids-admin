@@ -190,7 +190,7 @@ export default function EmailCampaigns() {
   const runAction = async (id: number, action: string) => {
     try {
       setActionLoading(true);
-      if (action === 'dry-run') setDryRunData(null);
+      if (action === 'dry-run' || action === 'repeat-preview') setDryRunData(null);
       
       const res = await fetch("/api/email-campaigns/action", {
         method: "POST",
@@ -207,7 +207,7 @@ export default function EmailCampaigns() {
       const result = await res.json();
       
       if (res.ok) {
-        if (action === 'dry-run') {
+        if (action === 'dry-run' || action === 'repeat-preview') {
           // Parse output to find email list
           const lines = result.output.split("\n")
             .filter((l: string) => l.includes("→"))
@@ -684,6 +684,22 @@ export default function EmailCampaigns() {
                         {actionLoading ? "..." : "Extract"}
                       </button>
                     </div>
+                  </div>
+
+                  <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
+                    <div className="flex-1">
+                      <p className="font-bold text-gray-700 text-sm">Preview Repeat Buyers</p>
+                      <p className="text-xs text-gray-500">
+                        Preview purchased customers eligible for the personalized follow-up. This does not create recipients or send email.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => runAction(selectedCampaign.campaign.id, 'repeat-preview')}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 transition text-sm font-bold disabled:opacity-50 whitespace-nowrap"
+                    >
+                      {actionLoading ? "Checking..." : "Preview Up to 300"}
+                    </button>
                   </div>
 
                   {/* Step 2: Test */}

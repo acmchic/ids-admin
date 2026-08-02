@@ -88,13 +88,20 @@ export default async function handler(
   } else if (action === "dry-run") {
     args.push("campaign:send-batch", String(campaignId), "--dry-run");
     if (safeBatchSize) args.push(`--batch-size=${safeBatchSize}`);
+  } else if (action === "repeat-preview") {
+    args.push(
+      "campaign:repeat-buyers",
+      `--source-id=${campaignId}`,
+      "--daily-limit=300",
+      "--dry-run"
+    );
   } else {
     return res.status(400).json({ error: "Invalid action" });
   }
 
   console.log("Executing campaign action", { action, campaignId, testMode });
 
-  execFile("php", args, { timeout: 120000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+  execFile("php", args, { timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
     if (error) {
       console.error("Campaign action failed", { action, campaignId, message: error.message });
       return res.status(500).json({
