@@ -16,6 +16,7 @@ type UploadItem = {
   createdAt: string | null;
   updatedAt: string | null;
   orderCount: number;
+  paidOrderCount: number;
   latestOrderId: string | null;
   latestOrderNum: string | null;
   latestCustomerName: string | null;
@@ -81,11 +82,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         pc.created_at,
         pc.updated_at,
         COUNT(DISTINCT o.id) AS order_count,
-        MAX(o.id) AS latest_order_id,
-        MAX(o.order_num) AS latest_order_num,
+        COUNT(DISTINCT CASE WHEN o.payment_status = 'COMPLETED' THEN o.id END) AS paid_order_count,
+        MAX(CASE WHEN o.payment_status = 'COMPLETED' THEN o.id END) AS latest_order_id,
+        MAX(CASE WHEN o.payment_status = 'COMPLETED' THEN o.order_num END) AS latest_order_num,
         SUBSTRING_INDEX(
           GROUP_CONCAT(
-            JSON_UNQUOTE(JSON_EXTRACT(o.shipping_address, '$.shipping_name'))
+            CASE WHEN o.payment_status = 'COMPLETED'
+              THEN JSON_UNQUOTE(JSON_EXTRACT(o.shipping_address, '$.shipping_name'))
+            END
             ORDER BY o.id DESC SEPARATOR '|||'
           ),
           '|||',
@@ -129,6 +133,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
           createdAt: row.created_at ? new Date(row.created_at).toISOString() : null,
           updatedAt: row.updated_at ? new Date(row.updated_at).toISOString() : null,
           orderCount: Number(row.order_count || 0),
+          paidOrderCount: Number(row.paid_order_count || 0),
           latestOrderId: row.latest_order_id ? String(row.latest_order_id) : null,
           latestOrderNum: row.latest_order_num ? String(row.latest_order_num) : null,
           latestCustomerName: row.latest_customer_name || null,

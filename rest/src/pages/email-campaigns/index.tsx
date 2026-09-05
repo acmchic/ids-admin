@@ -819,12 +819,14 @@ export default function EmailCampaigns() {
                 <h3 className="text-sm font-bold text-gray-700 mb-2">📋 Recipients (last 100)</h3>
                 <div className="max-h-96 overflow-y-auto border rounded-lg">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th><th className="text-left p-2">Opened</th><th className="text-left p-2">Clicks</th></tr></thead>
+                    <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">STT</th><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Last purchase</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th><th className="text-left p-2">Opened</th><th className="text-left p-2">Clicks</th></tr></thead>
                     <tbody>
                       {selectedCampaign.recentRecipients.map((r: any) => (
                         <tr key={r.id} className="border-b hover:bg-gray-50">
+                          <td className="p-2 text-gray-500">{selectedCampaign.recentRecipients.indexOf(r) + 1}</td>
                           <td className="p-2 font-mono">{r.email}</td>
                           <td className="p-2">{r.name || "-"}</td>
+                          <td className="p-2 text-gray-500">{r.days_since_last_order == null ? "-" : `${r.days_since_last_order} days ago`}</td>
                           <td className="p-2">
                             <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${recipientStatusColors[r.status] || "bg-gray-100"}`}>{r.status}</span>
                           </td>

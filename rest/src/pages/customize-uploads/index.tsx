@@ -17,6 +17,7 @@ type UploadItem = {
   uploadDate: string | null;
   url: string;
   orderCount: number;
+  paidOrderCount: number;
   latestOrderId: string | null;
   latestOrderNum: string | null;
   latestCustomerName: string | null;
@@ -340,9 +341,14 @@ export default function CustomizeUploadsPage() {
                 <div className="space-y-1 text-xs text-body">
                   <div className="truncate">Product: {item.slug}</div>
                   <div className="truncate">
-                    Orders: {item.orderCount}
+                    Paid orders: {item.paidOrderCount}
                     {item.latestOrderNum ? ` · Latest #${item.latestOrderNum}` : ""}
                   </div>
+                  {item.orderCount > item.paidOrderCount && (
+                    <div className="truncate text-amber-700">
+                      {item.orderCount - item.paidOrderCount} linked cart/order record{item.orderCount - item.paidOrderCount === 1 ? "" : "s"} without completed payment
+                    </div>
+                  )}
                   {item.latestCustomerName && <div className="truncate">Customer: {item.latestCustomerName}</div>}
                 </div>
 
