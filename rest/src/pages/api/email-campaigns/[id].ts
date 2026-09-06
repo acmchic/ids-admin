@@ -1,7 +1,15 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
+
+const completedPurchases = Prisma.sql`
+  SELECT LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(shipping_address, '$.shipping_email')))) AS email,
+         MAX(created_at) AS last_order_at
+  FROM orders
+  WHERE payment_status = 'COMPLETED' AND deleted_at IS NULL
+  GROUP BY LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(shipping_address, '$.shipping_email'))))
+`;
 
 function jsonSafe<T>(value: T): T {
   return JSON.parse(JSON.stringify(
@@ -54,23 +62,24 @@ export default async function handler(
                c.last_order_at,
                CASE WHEN c.last_order_at IS NULL THEN NULL ELSE DATEDIFF(CURRENT_DATE, DATE(c.last_order_at)) END AS days_since_last_order
         FROM email_campaign_recipients r
-        LEFT JOIN email_contacts c ON LOWER(TRIM(c.email)) = LOWER(TRIM(r.email))
+        LEFT JOIN (${completedPurchases}) c ON c.email = LOWER(TRIM(r.email))
         WHERE r.campaign_id = ${campaignId}
         ORDER BY 
           CASE r.status
-            WHEN 'failed' THEN 0 
-            WHEN 'sent' THEN 1 
-            WHEN 'pending' THEN 2 
+            WHEN 'pending' THEN 0
+            WHEN 'failed' THEN 1
+            WHEN 'sent' THEN 2
           END,
-          r.updated_at DESC, r.id DESC
+          c.last_order_at DESC, r.email ASC, r.id ASC
         LIMIT 100
       `;
 
       const nextRecipients: any[] = await prisma.$queryRaw`
-        SELECT id, email, name
-        FROM email_campaign_recipients
-        WHERE campaign_id = ${campaignId} AND status = 'pending'
-        ORDER BY id ASC
+        SELECT r.id, r.email, r.name, c.last_order_at
+        FROM email_campaign_recipients r
+        LEFT JOIN (${completedPurchases}) c ON c.email = LOWER(TRIM(r.email))
+        WHERE r.campaign_id = ${campaignId} AND r.status = 'pending'
+        ORDER BY c.last_order_at DESC, r.email ASC, r.id ASC
         LIMIT 50
       `;
 

@@ -323,7 +323,7 @@ export default function EmailCampaigns() {
       const json = await res.json();
       if (!res.ok) throw new Error("Không tải được chi tiết campaign. Vui lòng thử lại.");
       setSelectedCampaign(json);
-      setDryRunData((json.nextRecipients || []).map((recipient: any) => `${recipient.email} (${recipient.name || "-"})`));
+      setDryRunData((json.nextRecipients || []).map((recipient: any) => `${recipient.email} (${recipient.name || "-"}) — ${recipient.last_order_at ? new Date(recipient.last_order_at).toLocaleDateString() : "No completed order"}`));
     } catch (err: any) {
       setDetailError(err.message);
     } finally {
@@ -670,7 +670,7 @@ export default function EmailCampaigns() {
                   <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
                     <div className="flex-1">
                       <p className="font-bold text-gray-700 text-sm">Step 1: Extract Next Unsent Contacts</p>
-                      <p className="text-xs text-gray-500">Pick top customers who have not received a campaign email yet.</p>
+                      <p className="text-xs text-gray-500">Add customers with completed orders, newest purchase first. Existing campaign recipients are kept and skipped.</p>
                     </div>
                     <div className="flex gap-2">
                       <input 
@@ -692,7 +692,7 @@ export default function EmailCampaigns() {
 
                   <div className="flex flex-col md:flex-row md:items-center gap-4 py-3 border-b border-gray-100">
                     <div className="flex-1">
-                      <p className="font-bold text-gray-700 text-sm">Preview Repeat Buyers</p>
+                      <p className="font-bold text-gray-700 text-sm">Preview Next Completed Customers</p>
                       <p className="text-xs text-gray-500">
                         Preview purchased customers eligible for the personalized follow-up. This does not create recipients or send email.
                       </p>
@@ -821,7 +821,7 @@ export default function EmailCampaigns() {
                 </div>
               )}
               <div>
-                <h3 className="text-sm font-bold text-gray-700 mb-2">📋 Recipients (last 100)</h3>
+                <h3 className="text-sm font-bold text-gray-700 mb-2">📋 Recipients (first 100 · pending first · newest purchase first)</h3>
                 <div className="max-h-96 overflow-y-auto border rounded-lg">
                   <table className="w-full text-xs">
                     <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">STT</th><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Last purchase</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th><th className="text-left p-2">Opened</th><th className="text-left p-2">Clicks</th></tr></thead>

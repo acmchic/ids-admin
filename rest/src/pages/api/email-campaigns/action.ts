@@ -57,7 +57,7 @@ export default async function handler(
 
   const args = [artisanPath];
   if (action === "extract") {
-    args.push("campaign:extract-emails", String(campaignId));
+    args.push("campaign:extract-emails", String(campaignId), "--completed");
     if (safeLimit) args.push(`--limit=${safeLimit}`);
   } else if (action === "send") {
     if (testMode) {
@@ -90,9 +90,8 @@ export default async function handler(
     if (safeBatchSize) args.push(`--batch-size=${safeBatchSize}`);
   } else if (action === "repeat-preview") {
     args.push(
-      "campaign:repeat-buyers",
-      `--source-id=${campaignId}`,
-      "--daily-limit=300",
+      "campaign:extract-emails", String(campaignId), "--completed",
+      "--limit=300",
       "--dry-run"
     );
   } else {
