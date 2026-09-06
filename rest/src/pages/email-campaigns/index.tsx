@@ -150,6 +150,7 @@ export default function EmailCampaigns() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCampaign, setSelectedCampaign] = useState<CampaignDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
 
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createLoading, setCreateLoading] = useState(false);
@@ -317,14 +318,16 @@ export default function EmailCampaigns() {
   const fetchDetail = useCallback(async (id: number) => {
     try {
       setDetailLoading(true);
+      setDetailError(null);
       const res = await fetch(`/api/email-campaigns/${id}?t=${Date.now()}`, { cache: "no-store" });
-      if (!res.ok) throw new Error("Failed to fetch campaign detail");
       const json = await res.json();
+      if (!res.ok) throw new Error("Không tải được chi tiết campaign. Vui lòng thử lại.");
       setSelectedCampaign(json);
+      setDryRunData((json.nextRecipients || []).map((recipient: any) => `${recipient.email} (${recipient.name || "-"})`));
     } catch (err: any) {
-      setError(err.message);
+      setDetailError(err.message);
     } finally {
-    setDetailLoading(false);
+      setDetailLoading(false);
     }
   }, []);
 
@@ -613,6 +616,7 @@ export default function EmailCampaigns() {
 
           {/* Campaign Detail */}
           {detailLoading && <Card className="p-8 text-center"><Loader text="Loading details..." /></Card>}
+          {detailError && <div role="alert" className="p-4 mb-4 bg-red-50 text-red-700 rounded-lg">{detailError}</div>}
           {selectedCampaign && !detailLoading && (
             <Card className="p-6">
               <div className="flex items-center justify-between mb-6">
@@ -761,6 +765,7 @@ export default function EmailCampaigns() {
                       {dryRunData && (
                         <div className="mt-3 bg-gray-900 text-green-400 p-3 rounded-lg text-[10px] font-mono max-h-40 overflow-y-auto border border-gray-700">
                           <p className="text-gray-400 mb-1 font-sans border-b border-gray-800 pb-1">NEXT RECIPIENTS (PREVIEW):</p>
+                          {dryRunData.length === 0 && <p>No pending recipients in this campaign.</p>}
                           {dryRunData.map((email, i) => (
                             <p key={i}>→ {email}</p>
                           ))}

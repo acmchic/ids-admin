@@ -57,13 +57,21 @@ export default async function handler(
         LEFT JOIN email_contacts c ON LOWER(TRIM(c.email)) = LOWER(TRIM(r.email))
         WHERE r.campaign_id = ${campaignId}
         ORDER BY 
-          CASE status 
+          CASE r.status
             WHEN 'failed' THEN 0 
             WHEN 'sent' THEN 1 
             WHEN 'pending' THEN 2 
           END,
-          updated_at DESC
+          r.updated_at DESC, r.id DESC
         LIMIT 100
+      `;
+
+      const nextRecipients: any[] = await prisma.$queryRaw`
+        SELECT id, email, name
+        FROM email_campaign_recipients
+        WHERE campaign_id = ${campaignId} AND status = 'pending'
+        ORDER BY id ASC
+        LIMIT 50
       `;
 
       // Get failed recipients
@@ -131,6 +139,7 @@ export default async function handler(
         },
         stats: safeStats,
         recentRecipients: safeRecipients,
+        nextRecipients,
         failedRecipients: safeFailedRecipients,
         engagement: {
           uniqueOpens: Number(engagement[0]?.unique_opens || 0),
