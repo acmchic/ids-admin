@@ -59,6 +59,7 @@ export default async function handler(
       // Get recent recipients (last 50)
       const recentRecipients: any[] = await prisma.$queryRaw`
         SELECT r.id, r.email, r.name, r.status, r.error_message, r.sent_at, r.opened_at, r.clicked_at, r.click_count,
+               (r.rendered_html IS NOT NULL OR r.links IS NOT NULL) AS has_snapshot,
                c.last_order_at,
                CASE WHEN c.last_order_at IS NULL THEN NULL ELSE DATEDIFF(CURRENT_DATE, DATE(c.last_order_at)) END AS days_since_last_order
         FROM email_campaign_recipients r
@@ -85,7 +86,8 @@ export default async function handler(
 
       // Get failed recipients
       const failedRecipients: any[] = await prisma.$queryRaw`
-        SELECT id, email, name, error_message, updated_at
+        SELECT id, email, name, error_message, updated_at,
+               (rendered_html IS NOT NULL OR links IS NOT NULL) AS has_snapshot
         FROM email_campaign_recipients 
         WHERE campaign_id = ${campaignId} AND status = 'failed'
         ORDER BY updated_at DESC

@@ -1,7 +1,11 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { execFile } from "child_process";
+import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
+
+const prisma = new PrismaClient();
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const testMode = process.env.EMAIL_CAMPAIGN_TEST_MODE !== "false";
 const allowedRecipients = (process.env.EMAIL_CAMPAIGN_TEST_RECIPIENTS || "acmchic88@gmail.com")
@@ -48,11 +52,34 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid batch size" });
   }
 
+  if (action === "pause" || action === "resume") {
+    await prisma.$executeRaw`
+      UPDATE email_campaigns
+      SET status = ${action === "pause" ? "paused" : "sending"}, updated_at = NOW()
+      WHERE id = ${campaignId}
+    `;
+    return res.status(200).json({ message: action === "pause" ? "Campaign paused" : "Campaign resumed" });
+  }
+
   let artisanPath = "";
   try {
     artisanPath = resolveArtisanPath();
   } catch (error: any) {
     return res.status(500).json({ error: "Failed to locate Laravel artisan", details: error.message });
+  }
+
+  // Read-only JSON actions used by the admin preview panel.
+  if (action === "preview") {
+    const email = String(req.body.email || "").trim().toLowerCase();
+    if (!EMAIL_PATTERN.test(email)) {
+      return res.status(400).json({ error: "Enter a valid customer email to preview" });
+    }
+    return runJson(res, [artisanPath, "campaign:preview", String(campaignId), email, "--json"], 120000);
+  }
+
+  if (action === "check-batch") {
+    const checkLimit = safeLimit ?? 300;
+    return runJson(res, [artisanPath, "campaign:check-batch", String(campaignId), `--limit=${checkLimit}`, "--json"], 600000);
   }
 
   const args = [artisanPath];
@@ -66,6 +93,21 @@ export default async function handler(
         details: "Set EMAIL_CAMPAIGN_TEST_MODE=false only after production approval.",
       });
     }
+    // Never dispatch a batch that would send customers to a broken page.
+    const check = await execJson([
+      artisanPath, "campaign:check-batch", String(campaignId), `--limit=${Math.min(safeBatchSize ?? 300, 1000)}`, "--json",
+    ], 600000).catch((error: Error) => ({ error: error.message }));
+    if ((check as any).error) {
+      return res.status(500).json({ error: "Link check failed, nothing was sent", details: (check as any).error });
+    }
+    if (!(check as any).safe_to_send) {
+      return res.status(409).json({
+        error: "Sending blocked: some emails have a broken customize link",
+        details: `${(check as any).blocked} of ${(check as any).checked} emails blocked. Run "Check next batch" for details.`,
+        check,
+      });
+    }
+
     args.push("campaign:send-batch", String(campaignId));
     if (safeBatchSize) args.push(`--batch-size=${safeBatchSize}`);
   } else if (action === "test") {
@@ -116,6 +158,38 @@ export default async function handler(
       testMode,
     });
   });
+}
+
+function execJson(args: string[], timeout: number): Promise<any> {
+  return new Promise((resolve, reject) => {
+    execFile("php", args, { timeout, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(stdout);
+      } catch {
+        parsed = null;
+      }
+
+      if (parsed && typeof parsed === "object") {
+        return resolve(parsed);
+      }
+
+      reject(new Error(error?.message || stderr || "Command returned no JSON"));
+    });
+  });
+}
+
+async function runJson(res: NextApiResponse, args: string[], timeout: number) {
+  try {
+    const result = await execJson(args, timeout);
+    if (result.error) {
+      return res.status(400).json(result);
+    }
+    return res.status(200).json(result);
+  } catch (error: any) {
+    console.error("Campaign JSON action failed", { command: args[1], message: error.message });
+    return res.status(500).json({ error: "Failed to execute command", details: error.message });
+  }
 }
 
 function resolveArtisanPath() {

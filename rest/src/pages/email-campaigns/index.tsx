@@ -5,6 +5,7 @@ import { serverSideTranslations } from "next-i18next/serverSideTranslations";
 import { adminOnly } from "@utils/auth-utils";
 import Loader from "@components/ui/loader/loader";
 import { toast } from "react-toastify";
+import CampaignPreviewPanel, { BatchCheckResult, SentEmailModal } from "@components/email-campaign/campaign-preview-panel";
 
 type Campaign = {
   id: number;
@@ -30,6 +31,7 @@ type Campaign = {
 
 type CampaignDetail = {
   campaign: Campaign;
+  nextRecipients?: { email: string; name: string | null; last_order_at: string | null }[];
   stats: { status: string; count: number }[];
   recentRecipients: any[];
   failedRecipients: any[];
@@ -174,6 +176,8 @@ export default function EmailCampaigns() {
   const [actionLoading, setActionLoading] = useState(false);
   const [dryRunData, setDryRunData] = useState<string[] | null>(null);
   const [showSendConfirm, setShowSendConfirm] = useState(false);
+  const [batchCheck, setBatchCheck] = useState<BatchCheckResult | null>(null);
+  const [snapshotRecipientId, setSnapshotRecipientId] = useState<number | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -658,6 +662,14 @@ export default function EmailCampaigns() {
                 />
               </div>
 
+              <CampaignPreviewPanel
+                campaignId={selectedCampaign.campaign.id}
+                campaignStatus={selectedCampaign.campaign.status}
+                defaultEmail={selectedCampaign.nextRecipients?.[0]?.email || selectedCampaign.recentRecipients?.[0]?.email || ""}
+                onBatchChecked={setBatchCheck}
+                onStatusChanged={() => { fetchDetail(selectedCampaign.campaign.id); fetchCampaigns(); }}
+              />
+
               {/* Action Buttons */}
               <div className="bg-white border-2 border-orange-100 rounded-xl p-5 mb-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
@@ -754,9 +766,9 @@ export default function EmailCampaigns() {
                         </button>
                         <button 
                           onClick={() => setShowSendConfirm(true)}
-                          disabled={actionLoading || selectedPendingCount === 0 || Boolean(data?.testMode)}
+                          disabled={actionLoading || selectedPendingCount === 0 || Boolean(data?.testMode) || Boolean(batchCheck && !batchCheck.safe_to_send)}
                           className="flex-1 px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition text-sm font-extrabold shadow-md hover:shadow-lg disabled:opacity-50"
-                          title={data?.testMode ? "Real sending is locked in campaign test mode" : undefined}
+                          title={data?.testMode ? "Real sending is locked in campaign test mode" : batchCheck && !batchCheck.safe_to_send ? "Broken links found in the next batch" : undefined}
                         >
                            {data?.testMode ? "Sending Locked" : "Start Sending"}
                         </button>
@@ -810,10 +822,18 @@ export default function EmailCampaigns() {
                   <h3 className="text-sm font-bold text-red-600 mb-2">❌ Failed ({selectedCampaign.failedRecipients.length})</h3>
                   <div className="max-h-48 overflow-y-auto border rounded-lg">
                     <table className="w-full text-xs">
-                      <thead className="bg-red-50 sticky top-0"><tr><th className="text-left p-2">Email</th><th className="text-left p-2">Error</th></tr></thead>
+                      <thead className="bg-red-50 sticky top-0"><tr><th className="text-left p-2">Email</th><th className="text-left p-2">Error</th><th className="p-2" /></tr></thead>
                       <tbody>
                         {selectedCampaign.failedRecipients.map((r: any) => (
-                          <tr key={r.id} className="border-b"><td className="p-2 font-mono">{r.email}</td><td className="p-2 text-red-600">{r.error_message || "-"}</td></tr>
+                          <tr key={r.id} className="border-b">
+                            <td className="p-2 font-mono">{r.email}</td>
+                            <td className="p-2 text-red-600">{r.error_message || "-"}</td>
+                            <td className="p-2 text-right">
+                              {Boolean(r.has_snapshot) && (
+                                <button onClick={() => setSnapshotRecipientId(r.id)} className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200">Links</button>
+                              )}
+                            </td>
+                          </tr>
                         ))}
                       </tbody>
                     </table>
@@ -824,7 +844,7 @@ export default function EmailCampaigns() {
                 <h3 className="text-sm font-bold text-gray-700 mb-2">📋 Recipients (first 100 · pending first · newest purchase first)</h3>
                 <div className="max-h-96 overflow-y-auto border rounded-lg">
                   <table className="w-full text-xs">
-                    <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">STT</th><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Last purchase</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th><th className="text-left p-2">Opened</th><th className="text-left p-2">Clicks</th></tr></thead>
+                    <thead className="bg-gray-50 sticky top-0"><tr><th className="text-left p-2">STT</th><th className="text-left p-2">Email</th><th className="text-left p-2">Name</th><th className="text-left p-2">Last purchase</th><th className="text-left p-2">Status</th><th className="text-left p-2">Sent At</th><th className="text-left p-2">Opened</th><th className="text-left p-2">Clicks</th><th className="text-left p-2">Email</th></tr></thead>
                     <tbody>
                       {selectedCampaign.recentRecipients.map((r: any) => (
                         <tr key={r.id} className="border-b hover:bg-gray-50">
@@ -838,12 +858,20 @@ export default function EmailCampaigns() {
                           <td className="p-2 text-gray-500">{r.sent_at ? new Date(r.sent_at).toLocaleString() : "-"}</td>
                           <td className="p-2 text-gray-500">{r.opened_at ? new Date(r.opened_at).toLocaleString() : "-"}</td>
                           <td className="p-2 font-mono">{r.click_count || 0}</td>
+                          <td className="p-2">
+                            {Boolean(r.has_snapshot) ? (
+                              <button onClick={() => setSnapshotRecipientId(r.id)} className="px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100">View</button>
+                            ) : "-"}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               </div>
+              {snapshotRecipientId !== null && (
+                <SentEmailModal recipientId={snapshotRecipientId} onClose={() => setSnapshotRecipientId(null)} />
+              )}
             </Card>
           )}
         </>
