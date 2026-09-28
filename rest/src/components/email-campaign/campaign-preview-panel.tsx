@@ -9,6 +9,19 @@ export type CampaignLink = {
   ok: boolean;
   required: boolean;
   note?: string | null;
+  page_title?: string | null;
+};
+
+type OrderLine = {
+  order_id: number;
+  tracking_number: string | null;
+  ordered_at: string;
+  is_custom: boolean;
+  product_name: string | null;
+  product_slug: string | null;
+  variation: string | null;
+  image_url: string | null;
+  note: string | null;
 };
 
 type PreviewResult = {
@@ -23,6 +36,7 @@ type PreviewResult = {
   products_in_email: number;
   products_dropped: number;
   links: CampaignLink[];
+  orders?: OrderLine[];
   mailing_address_missing: boolean;
   html: string;
 };
@@ -94,6 +108,7 @@ export function LinkTable({ links }: { links: CampaignLink[] }) {
                 <p className="font-mono text-[10px] text-gray-500 break-all" title={link.url}>
                   {link.url.split("?")[0].replace(/^https?:\/\/[^/]+/, "")}
                 </p>
+                {link.page_title && <p className="text-[10px] text-gray-700 mt-0.5">Opens: “{link.page_title}”</p>}
                 {link.note && <p className="text-[10px] text-red-600 mt-0.5">{link.note}</p>}
               </td>
               <td className="p-2 align-top whitespace-nowrap">
@@ -116,6 +131,57 @@ export function LinkTable({ links }: { links: CampaignLink[] }) {
               </td>
             </tr>
           ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** What the customer actually bought, to compare with the links in the email. */
+export function OrdersTable({ orders, links }: { orders: OrderLine[]; links: CampaignLink[] }) {
+  const inEmail = (name: string | null) =>
+    links.find((link) => link.key.startsWith("reorder") && link.label === `Reorder: ${name}`);
+
+  return (
+    <div className="border rounded-lg overflow-hidden">
+      <p className="bg-gray-50 p-2 text-xs font-bold text-gray-700">Customer's orders ({orders.length})</p>
+      {orders.length === 0 && <p className="p-2 text-xs text-gray-500">No completed orders found for this email.</p>}
+      <table className="w-full text-xs">
+        <tbody>
+          {orders.map((order, index) => {
+            const link = inEmail(order.product_name);
+            return (
+              <tr key={`${order.order_id}-${index}`} className="border-t align-top">
+                <td className="p-2 w-14">
+                  {order.image_url ? (
+                    <img src={order.image_url} alt="" loading="lazy" className="w-12 h-12 object-cover rounded border" />
+                  ) : (
+                    <div className="w-12 h-12 rounded border bg-gray-100" />
+                  )}
+                </td>
+                <td className="p-2">
+                  <p className="font-semibold text-gray-800">{order.product_name || "(unknown product)"}</p>
+                  <p className="text-gray-500">
+                    #{order.tracking_number || order.order_id} · {order.ordered_at.slice(0, 10)}
+                    {order.variation ? ` · ${order.variation}` : ""}
+                    {order.is_custom ? " · custom" : ""}
+                  </p>
+                  {order.note && <p className="text-red-600">{order.note}</p>}
+                </td>
+                <td className="p-2 whitespace-nowrap">
+                  {link ? (
+                    link.ok ? (
+                      <a href={link.url} target="_blank" rel="noreferrer" className="text-green-700 font-semibold underline">In email ↗</a>
+                    ) : (
+                      <span className="text-red-600 font-semibold">Removed</span>
+                    )
+                  ) : (
+                    <span className="text-gray-400">Not in email</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -293,8 +359,9 @@ export default function CampaignPreviewPanel({
         <div className="lg:col-span-3">
           <EmailFrame html={result.html} />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4">
           <LinkTable links={result.links} />
+          <OrdersTable orders={result.orders || []} links={result.links} />
         </div>
       </div>
     </div>
