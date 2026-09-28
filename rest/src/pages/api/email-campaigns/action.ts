@@ -180,7 +180,13 @@ export default async function handler(
 
 function batchFiles(campaignId: number) {
   const base = path.join(os.tmpdir(), `campaign-check-${campaignId}`);
-  return { result: `${base}.json`, partial: `${base}.partial`, error: `${base}.err`, pid: `${base}.pid` };
+  return {
+    result: `${base}.json`,
+    partial: `${base}.partial`,
+    error: `${base}.err`,
+    pid: `${base}.pid`,
+    progress: `${base}.progress`,
+  };
 }
 
 function removeFile(file: string) {
@@ -223,7 +229,7 @@ function startBatchCheck(artisanPath: string, campaignId: number, limit: number)
   const err = fs.openSync(files.error, "w");
   const child = spawn(
     "php",
-    [artisanPath, "campaign:check-batch", String(campaignId), `--limit=${limit}`, "--json"],
+    [artisanPath, "campaign:check-batch", String(campaignId), `--limit=${limit}`, "--json", `--progress=${files.progress}`],
     { detached: true, stdio: ["ignore", out, err] }
   );
   fs.closeSync(out);
@@ -242,7 +248,7 @@ function batchCheckStatus(campaignId: number) {
   const files = batchFiles(campaignId);
   const pid = Number(fs.existsSync(files.pid) ? fs.readFileSync(files.pid, "utf8") : 0);
   if (pid && isAlive(pid)) {
-    return { status: "running" };
+    return { status: "running", progress: readJson(files.progress) };
   }
 
   // Finished (the exit handler may not have run if the admin restarted meanwhile).

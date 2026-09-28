@@ -202,6 +202,7 @@ export default function CampaignPreviewPanel({
   const [preview, setPreview] = useState<PreviewResult | null>(null);
   const [batch, setBatch] = useState<BatchCheckResult | null>(null);
   const [busy, setBusy] = useState<"" | "preview" | "test" | "batch" | "status">("");
+  const [progress, setProgress] = useState<{ phase: string; done: number; total: number } | null>(null);
 
   useEffect(() => {
     setPreview(null);
@@ -244,7 +245,10 @@ export default function CampaignPreviewPanel({
       for (let i = 0; i < 300; i++) {
         await new Promise((resolve) => setTimeout(resolve, 3000));
         const status = await postAction({ id: campaignId, action: "check-batch-status" });
-        if (status.status === "running") continue;
+        if (status.status === "running") {
+          setProgress(status.progress || null);
+          continue;
+        }
         if (status.status !== "done") throw new Error(status.error || "Link check failed");
         setBatch(status);
         onBatchChecked?.(status);
@@ -257,6 +261,7 @@ export default function CampaignPreviewPanel({
       toast.error(err.message);
     } finally {
       setBusy("");
+      setProgress(null);
     }
   };
 
@@ -302,7 +307,11 @@ export default function CampaignPreviewPanel({
       <div className="flex flex-wrap items-center gap-2 mb-4">
         <h3 className="text-base font-extrabold text-gray-800 flex-1">Email check</h3>
         <button onClick={checkBatch} disabled={!!busy} className={`${button} bg-gray-900 text-white hover:bg-gray-700`}>
-          {busy === "batch" ? "Checking links..." : "Check next 300 emails"}
+          {busy === "batch"
+            ? progress
+              ? `${progress.phase} ${progress.done}/${progress.total}...`
+              : "Starting check..."
+            : "Check next 300 emails"}
         </button>
         {(campaignStatus === "sending" || campaignStatus === "paused") && (
           <button onClick={toggleStatus} disabled={!!busy} className={`${button} bg-gray-100 text-gray-700 hover:bg-gray-200`}>
