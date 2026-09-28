@@ -83,7 +83,9 @@ export function LinkTable({ links }: { links: CampaignLink[] }) {
             <tr key={`${link.key}-${index}`} className={`border-t ${link.ok ? "" : "bg-red-50"}`}>
               <td className="p-2 align-top">
                 <p className="font-semibold text-gray-800">{link.label}</p>
-                <p className="font-mono text-[10px] text-gray-500 break-all">{link.url}</p>
+                <p className="font-mono text-[10px] text-gray-500 break-all" title={link.url}>
+                  {link.url.split("?")[0].replace(/^https?:\/\/[^/]+/, "")}
+                </p>
                 {link.note && <p className="text-[10px] text-red-600 mt-0.5">{link.note}</p>}
               </td>
               <td className="p-2 align-top whitespace-nowrap">
@@ -188,12 +190,10 @@ export default function CampaignPreviewPanel({
   onStatusChanged,
 }: Props) {
   const [email, setEmail] = useState(defaultEmail || "");
+  const [testTo, setTestTo] = useState("acmchic88@gmail.com");
   const [preview, setPreview] = useState<PreviewResult | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [batchLimit, setBatchLimit] = useState(300);
   const [batch, setBatch] = useState<BatchCheckResult | null>(null);
-  const [batchLoading, setBatchLoading] = useState(false);
-  const [statusLoading, setStatusLoading] = useState(false);
+  const [busy, setBusy] = useState<"" | "preview" | "test" | "batch" | "status">("");
 
   useEffect(() => {
     setPreview(null);
@@ -203,269 +203,129 @@ export default function CampaignPreviewPanel({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [campaignId]);
 
-  const runPreview = async (target?: string) => {
-    const address = (target ?? email).trim();
-    if (!address) {
-      toast.error("Enter a customer email to preview");
-      return;
-    }
-    setEmail(address);
-    setPreviewLoading(true);
+  const run = async (kind: typeof busy, body: Record<string, unknown>) => {
+    setBusy(kind);
     try {
-      setPreview(await postAction({ id: campaignId, action: "preview", email: address }));
+      return await postAction({ id: campaignId, ...body });
     } catch (err: any) {
       toast.error(err.message);
+      return null;
     } finally {
-      setPreviewLoading(false);
+      setBusy("");
     }
   };
 
-  const runBatchCheck = async () => {
-    setBatchLoading(true);
-    try {
-      const result = await postAction({ id: campaignId, action: "check-batch", limit: batchLimit });
-      setBatch(result);
-      onBatchChecked?.(result);
-      if (result.safe_to_send) {
-        toast.success(`All ${result.checked} emails OK to send`);
-      } else {
-        toast.error(`${result.blocked} of ${result.checked} emails blocked by broken links`);
-      }
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setBatchLoading(false);
-    }
+  const runPreview = async (target?: string) => {
+    const address = (target ?? email).trim();
+    if (!address) return toast.error("Enter a customer email");
+    setEmail(address);
+    const result = await run("preview", { action: "preview", email: address });
+    if (result) setPreview(result);
+  };
+
+  const sendTest = async () => {
+    const result = await run("test", { action: "test", email: testTo, previewAs: email.trim() || undefined });
+    if (result) toast.success(`Test sent to ${testTo}`);
+  };
+
+  const checkBatch = async () => {
+    const result = await run("batch", { action: "check-batch", limit: 300 });
+    if (!result) return;
+    setBatch(result);
+    onBatchChecked?.(result);
+    // Pre-fill the next customer so Preview works in one click.
+    if (!email.trim() && result.recipients?.[0]?.email) setEmail(result.recipients[0].email);
   };
 
   const toggleStatus = async () => {
-    const action = campaignStatus === "paused" ? "resume" : "pause";
-    setStatusLoading(true);
-    try {
-      const result = await postAction({ id: campaignId, action });
+    const result = await run("status", { action: campaignStatus === "paused" ? "resume" : "pause" });
+    if (result) {
       toast.success(result.message);
       onStatusChanged?.();
-    } catch (err: any) {
-      toast.error(err.message);
-    } finally {
-      setStatusLoading(false);
     }
   };
 
+  const button = "px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50 whitespace-nowrap";
+
   return (
-    <div className="bg-white border-2 border-blue-100 rounded-xl p-5 mb-6 shadow-sm">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-4">
-        <div>
-          <h3 className="text-base font-extrabold text-gray-800">👀 Email content check</h3>
-          <p className="text-xs text-gray-500">
-            See exactly what a customer will receive. Every link is opened on the live store; product links that fail are
-            removed and emails with a broken customize link are never sent.
-          </p>
-        </div>
+    <div className="border rounded-xl p-5 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <h3 className="text-base font-extrabold text-gray-800 flex-1">Email check</h3>
+        <button onClick={checkBatch} disabled={!!busy} className={`${button} bg-gray-900 text-white hover:bg-gray-700`}>
+          {busy === "batch" ? "Checking links..." : "Check next 300 emails"}
+        </button>
         {(campaignStatus === "sending" || campaignStatus === "paused") && (
-          <button
-            onClick={toggleStatus}
-            disabled={statusLoading}
-            className={`px-4 py-2 rounded-lg text-sm font-bold border disabled:opacity-50 ${
-              campaignStatus === "paused"
-                ? "bg-green-50 text-green-700 border-green-200 hover:bg-green-100"
-                : "bg-yellow-50 text-yellow-700 border-yellow-200 hover:bg-yellow-100"
-            }`}
-          >
-            {statusLoading ? "..." : campaignStatus === "paused" ? "▶ Resume daily sending" : "⏸ Pause daily sending"}
+          <button onClick={toggleStatus} disabled={!!busy} className={`${button} bg-gray-100 text-gray-700 hover:bg-gray-200`}>
+            {campaignStatus === "paused" ? "▶ Resume" : "⏸ Pause"}
           </button>
         )}
       </div>
 
-      {/* Single customer preview */}
+      {batch && (
+        <div className={`p-3 mb-4 rounded-lg text-sm ${batch.safe_to_send ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+          <p className="font-semibold">
+            {batch.checked === 0
+              ? "No customers waiting to be emailed."
+              : batch.safe_to_send
+                ? `✅ ${batch.checked} emails OK · ${batch.with_products} with past products · ${batch.products_dropped} broken product links removed`
+                : `⛔ ${batch.blocked} of ${batch.checked} emails blocked: customize page does not open`}
+          </p>
+          {batch.broken_links.slice(0, 10).map((link) => (
+            <p key={link.url} className="text-xs font-mono break-all mt-1">
+              {link.status ?? "no response"} · {link.count}× ·{" "}
+              <a href={link.url} target="_blank" rel="noreferrer" className="underline">{link.url}</a>
+            </p>
+          ))}
+        </div>
+      )}
+
       <div className="flex flex-col md:flex-row gap-2 mb-4">
         <input
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && runPreview()}
-          className="flex-1 border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-200 outline-none"
-          placeholder="Customer email, e.g. customer@gmail.com"
+          className="flex-1 border rounded-lg px-3 py-2 text-sm"
+          placeholder="Customer email"
         />
-        <button
-          onClick={() => runPreview()}
-          disabled={previewLoading}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm font-bold disabled:opacity-50 whitespace-nowrap"
-        >
-          {previewLoading ? "Rendering..." : "Preview email"}
+        <button onClick={() => runPreview()} disabled={!!busy} className={`${button} bg-blue-600 text-white hover:bg-blue-700`}>
+          {busy === "preview" ? "Loading..." : "Preview"}
+        </button>
+        <input
+          type="email"
+          value={testTo}
+          onChange={(e) => setTestTo(e.target.value)}
+          className="md:w-56 border rounded-lg px-3 py-2 text-sm"
+          placeholder="Send test to"
+        />
+        <button onClick={sendTest} disabled={!!busy} className={`${button} bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100`}>
+          {busy === "test" ? "Sending..." : "Send test"}
         </button>
       </div>
 
       {preview && (
-        <div className="mb-6">
-          {preview.blocked && (
-            <div className="p-3 mb-3 rounded-lg bg-red-50 text-red-700 text-sm font-semibold">
-              ⛔ This customer would NOT be emailed: {preview.block_reason}
+        <>
+          {(preview.blocked || preview.mailing_address_missing || preview.products_dropped > 0) && (
+            <div className="p-3 mb-3 rounded-lg bg-yellow-50 text-yellow-800 text-xs space-y-1">
+              {preview.blocked && <p className="text-red-700 font-semibold">⛔ Will not be sent: {preview.block_reason}</p>}
+              {preview.products_dropped > 0 && <p>{preview.products_dropped} past product(s) removed (page does not open).</p>}
+              {preview.mailing_address_missing && <p>EMAIL_MAILING_ADDRESS is not set (required in the footer by US law).</p>}
             </div>
           )}
-          {preview.mailing_address_missing && (
-            <div className="p-3 mb-3 rounded-lg bg-yellow-50 text-yellow-800 text-xs">
-              ⚠️ EMAIL_MAILING_ADDRESS is not set on the orders server. US law (CAN-SPAM) requires a postal address in the
-              footer of marketing emails.
-            </div>
-          )}
-          {preview.products_dropped > 0 && (
-            <div className="p-3 mb-3 rounded-lg bg-yellow-50 text-yellow-800 text-xs">
-              ⚠️ {preview.products_dropped} past product(s) removed because their page does not open.
-            </div>
-          )}
-          <div className="text-xs text-gray-600 mb-3 space-y-0.5">
-            <p>
-              <strong>To:</strong> {preview.name ? `${preview.name} <${preview.email}>` : preview.email}
-              {preview.country_code ? ` · ${preview.country_code}` : " · country unknown"}
-              {preview.last_order_at ? ` · last order ${new Date(preview.last_order_at).toLocaleDateString()}` : ""}
-            </p>
-            <p>
-              <strong>Subject:</strong> {preview.subject}
-            </p>
-            {preview.preview_text && (
-              <p>
-                <strong>Preview text:</strong> {preview.preview_text}
-              </p>
-            )}
-            <p>
-              <strong>Past products in email:</strong> {preview.products_in_email}
-            </p>
-          </div>
+          <p className="text-xs text-gray-600 mb-3">
+            <strong>Subject:</strong> {preview.subject} · <strong>To:</strong> {preview.email}
+            {preview.country_code ? ` (${preview.country_code})` : ""}
+          </p>
           <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
             <div className="lg:col-span-3">
               <EmailFrame html={preview.html} />
             </div>
             <div className="lg:col-span-2">
-              <p className="text-sm font-bold text-gray-700 mb-2">Links in this email</p>
               <LinkTable links={preview.links} />
             </div>
           </div>
-        </div>
+        </>
       )}
-
-      {/* Next batch check */}
-      <div className="border-t pt-4">
-        <div className="flex flex-col md:flex-row md:items-center gap-2 mb-3">
-          <div className="flex-1">
-            <p className="font-bold text-gray-700 text-sm">Check the next batch before it goes out</p>
-            <p className="text-xs text-gray-500">
-              Renders the next emails (without sending) and opens every link. Takes 1–3 minutes for 300 emails.
-            </p>
-          </div>
-          <input
-            type="number"
-            min={1}
-            max={1000}
-            value={batchLimit}
-            onChange={(e) => setBatchLimit(Number(e.target.value))}
-            className="w-24 border rounded-lg px-3 py-2 text-sm"
-          />
-          <button
-            onClick={runBatchCheck}
-            disabled={batchLoading}
-            className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-700 transition text-sm font-bold disabled:opacity-50 whitespace-nowrap"
-          >
-            {batchLoading ? "Checking links..." : "Check next batch"}
-          </button>
-        </div>
-
-        {batch && (
-          <div>
-            <div
-              className={`p-3 mb-3 rounded-lg text-sm font-semibold ${
-                batch.safe_to_send ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
-              }`}
-            >
-              {batch.safe_to_send
-                ? `✅ ${batch.checked} emails checked — all customize links work. Checked ${batch.checked_at}.`
-                : `⛔ ${batch.blocked} of ${batch.checked} emails blocked by a broken customize link. Fix the store page before sending.`}
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3 text-center">
-              {[
-                ["Checked", batch.checked],
-                ["OK to send", batch.ok],
-                ["With past products", batch.with_products],
-                ["Customize only", batch.without_products],
-                ["Products removed", batch.products_dropped],
-              ].map(([label, value]) => (
-                <div key={label as string} className="p-3 rounded-lg bg-gray-50 border">
-                  <p className="text-xl font-bold text-gray-900">{Number(value).toLocaleString()}</p>
-                  <p className="text-[11px] text-gray-500">{label}</p>
-                </div>
-              ))}
-            </div>
-
-            {batch.broken_links.length > 0 && (
-              <div className="mb-3">
-                <p className="text-sm font-bold text-red-600 mb-1">Broken links ({batch.broken_links.length})</p>
-                <div className="max-h-48 overflow-y-auto border rounded-lg">
-                  <table className="w-full text-xs">
-                    <thead className="bg-red-50 sticky top-0">
-                      <tr>
-                        <th className="text-left p-2">URL</th>
-                        <th className="text-left p-2">HTTP</th>
-                        <th className="text-left p-2">Emails</th>
-                        <th className="text-left p-2">Effect</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {batch.broken_links.map((link) => (
-                        <tr key={link.url} className="border-t">
-                          <td className="p-2 font-mono break-all">
-                            <a href={link.url} target="_blank" rel="noreferrer" className="text-blue-600 underline">
-                              {link.url}
-                            </a>
-                          </td>
-                          <td className="p-2">{link.status ?? "No response"}</td>
-                          <td className="p-2">{link.count}</td>
-                          <td className="p-2">{link.required ? "Email blocked" : "Product removed"}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            <p className="text-sm font-bold text-gray-700 mb-1">Next recipients</p>
-            <div className="max-h-64 overflow-y-auto border rounded-lg">
-              <table className="w-full text-xs">
-                <thead className="bg-gray-50 sticky top-0">
-                  <tr>
-                    <th className="text-left p-2">#</th>
-                    <th className="text-left p-2">Email</th>
-                    <th className="text-left p-2">Products</th>
-                    <th className="text-left p-2">Status</th>
-                    <th className="p-2" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {batch.recipients.map((recipient, index) => (
-                    <tr key={recipient.email} className={`border-t ${recipient.blocked ? "bg-red-50" : ""}`}>
-                      <td className="p-2 text-gray-500">{index + 1}</td>
-                      <td className="p-2 font-mono">{recipient.email}</td>
-                      <td className="p-2">
-                        {recipient.products}
-                        {recipient.dropped > 0 && <span className="text-red-600"> (−{recipient.dropped})</span>}
-                      </td>
-                      <td className="p-2">{recipient.blocked ? "Blocked" : "OK"}</td>
-                      <td className="p-2 text-right">
-                        <button
-                          onClick={() => runPreview(recipient.email)}
-                          className="px-2 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100"
-                        >
-                          Preview
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

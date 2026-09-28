@@ -52,6 +52,18 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid batch size" });
   }
 
+  // The US comeback campaign enrolls and sends automatically every day
+  // (US buyers only, newest first, warm-up); manual extract/dispatch would bypass that.
+  if (["extract", "send", "dry-run", "repeat-preview"].includes(action)) {
+    const rows: any[] = await prisma.$queryRaw`SELECT template FROM email_campaigns WHERE id = ${campaignId}`;
+    if (rows[0]?.template === "comeback") {
+      return res.status(400).json({
+        error: "This campaign sends automatically every day",
+        details: "Use Preview email / Check next batch. Recipients are added by the daily campaign:comeback job.",
+      });
+    }
+  }
+
   if (action === "pause" || action === "resume") {
     await prisma.$executeRaw`
       UPDATE email_campaigns

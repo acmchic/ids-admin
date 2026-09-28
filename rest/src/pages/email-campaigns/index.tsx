@@ -10,6 +10,7 @@ import CampaignPreviewPanel, { BatchCheckResult, SentEmailModal } from "@compone
 type Campaign = {
   id: number;
   name: string;
+  template?: string | null;
   subject: string;
   status: string;
   discount_code: string | null;
@@ -319,9 +320,10 @@ export default function EmailCampaigns() {
     }
   }, []);
 
-  const fetchDetail = useCallback(async (id: number) => {
+  // silent: background refresh that keeps the detail view (and its preview state) mounted
+  const fetchDetail = useCallback(async (id: number, silent = false) => {
     try {
-      setDetailLoading(true);
+      if (!silent) setDetailLoading(true);
       setDetailError(null);
       const res = await fetch(`/api/email-campaigns/${id}?t=${Date.now()}`, { cache: "no-store" });
       const json = await res.json();
@@ -346,7 +348,7 @@ export default function EmailCampaigns() {
     let interval: NodeJS.Timeout;
     if (selectedCampaign && selectedCampaign.campaign.status === 'sending') {
       interval = setInterval(() => {
-        fetchDetail(selectedCampaign.campaign.id);
+        fetchDetail(selectedCampaign.campaign.id, true);
       }, 10000); // 10 seconds
     }
     return () => clearInterval(interval);
@@ -667,9 +669,12 @@ export default function EmailCampaigns() {
                 campaignStatus={selectedCampaign.campaign.status}
                 defaultEmail={selectedCampaign.nextRecipients?.[0]?.email || selectedCampaign.recentRecipients?.[0]?.email || ""}
                 onBatchChecked={setBatchCheck}
-                onStatusChanged={() => { fetchDetail(selectedCampaign.campaign.id); fetchCampaigns(); }}
+                onStatusChanged={() => { fetchDetail(selectedCampaign.campaign.id, true); fetchCampaigns(); }}
               />
 
+              {/* Old manual flow; the comeback campaign enrolls and sends automatically. */}
+              {selectedCampaign.campaign.template !== "comeback" && (
+                <>
               {/* Action Buttons */}
               <div className="bg-white border-2 border-orange-100 rounded-xl p-5 mb-6 shadow-sm">
                 <div className="flex items-center gap-2 mb-4">
@@ -787,6 +792,9 @@ export default function EmailCampaigns() {
                   </div>
                 </div>
               </div>
+
+                </>
+              )}
 
               {/* Confirmation Modal */}
               {showSendConfirm && !data?.testMode && (
