@@ -1,5 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { execFile } from "child_process";
+import { execFile, spawn } from "child_process";
+import os from "os";
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
@@ -89,9 +90,14 @@ export default async function handler(
     return runJson(res, [artisanPath, "campaign:preview", String(campaignId), email, "--json"], 120000);
   }
 
+  // Checking 300 emails takes minutes, longer than Cloudflare (100s) and nginx (60s)
+  // allow for one request, so it runs in the background and the page polls for the result.
   if (action === "check-batch") {
-    const checkLimit = safeLimit ?? 300;
-    return runJson(res, [artisanPath, "campaign:check-batch", String(campaignId), `--limit=${checkLimit}`, "--json"], 600000);
+    return res.status(202).json(startBatchCheck(artisanPath, campaignId, safeLimit ?? 300));
+  }
+
+  if (action === "check-batch-status") {
+    return res.status(200).json(batchCheckStatus(campaignId));
   }
 
   const args = [artisanPath];
@@ -170,6 +176,86 @@ export default async function handler(
       testMode,
     });
   });
+}
+
+function batchFiles(campaignId: number) {
+  const base = path.join(os.tmpdir(), `campaign-check-${campaignId}`);
+  return { result: `${base}.json`, partial: `${base}.partial`, error: `${base}.err`, pid: `${base}.pid` };
+}
+
+function removeFile(file: string) {
+  try {
+    fs.unlinkSync(file);
+  } catch {
+    // already gone
+  }
+}
+
+function isAlive(pid: number) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function readJson(file: string) {
+  try {
+    return JSON.parse(fs.readFileSync(file, "utf8"));
+  } catch {
+    return null;
+  }
+}
+
+function startBatchCheck(artisanPath: string, campaignId: number, limit: number) {
+  const files = batchFiles(campaignId);
+  const running = Number(fs.existsSync(files.pid) ? fs.readFileSync(files.pid, "utf8") : 0);
+  if (running && isAlive(running)) {
+    return { status: "running" };
+  }
+
+  for (const file of Object.values(files)) {
+    removeFile(file);
+  }
+
+  const out = fs.openSync(files.partial, "w");
+  const err = fs.openSync(files.error, "w");
+  const child = spawn(
+    "php",
+    [artisanPath, "campaign:check-batch", String(campaignId), `--limit=${limit}`, "--json"],
+    { detached: true, stdio: ["ignore", out, err] }
+  );
+  fs.closeSync(out);
+  fs.closeSync(err);
+  fs.writeFileSync(files.pid, String(child.pid));
+  child.on("exit", () => {
+    if (fs.existsSync(files.partial)) fs.renameSync(files.partial, files.result);
+    removeFile(files.pid);
+  });
+  child.unref();
+
+  return { status: "running" };
+}
+
+function batchCheckStatus(campaignId: number) {
+  const files = batchFiles(campaignId);
+  const pid = Number(fs.existsSync(files.pid) ? fs.readFileSync(files.pid, "utf8") : 0);
+  if (pid && isAlive(pid)) {
+    return { status: "running" };
+  }
+
+  // Finished (the exit handler may not have run if the admin restarted meanwhile).
+  const result = readJson(files.result) ?? readJson(files.partial);
+  if (result && !result.error) {
+    return { status: "done", ...result };
+  }
+
+  const stderr = fs.existsSync(files.error) ? fs.readFileSync(files.error, "utf8").slice(-500) : "";
+  if (!result && !stderr && !pid) {
+    return { status: "idle" };
+  }
+  return { status: "failed", error: result?.error || stderr || "Link check stopped without a result" };
 }
 
 function execJson(args: string[], timeout: number): Promise<any> {

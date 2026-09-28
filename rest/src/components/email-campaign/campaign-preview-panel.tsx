@@ -229,12 +229,27 @@ export default function CampaignPreviewPanel({
   };
 
   const checkBatch = async () => {
-    const result = await run("batch", { action: "check-batch", limit: 300 });
-    if (!result) return;
-    setBatch(result);
-    onBatchChecked?.(result);
-    // Pre-fill the next customer so Preview works in one click.
-    if (!email.trim() && result.recipients?.[0]?.email) setEmail(result.recipients[0].email);
+    setBusy("batch");
+    try {
+      await postAction({ id: campaignId, action: "check-batch", limit: 300 });
+      // Runs in the background on the server; poll every 3s for up to 15 minutes.
+      for (let i = 0; i < 300; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const status = await postAction({ id: campaignId, action: "check-batch-status" });
+        if (status.status === "running") continue;
+        if (status.status !== "done") throw new Error(status.error || "Link check failed");
+        setBatch(status);
+        onBatchChecked?.(status);
+        // Pre-fill the next customer so Preview works in one click.
+        if (!email.trim() && status.recipients?.[0]?.email) setEmail(status.recipients[0].email);
+        return;
+      }
+      throw new Error("Link check is taking too long; try again later");
+    } catch (err: any) {
+      toast.error(err.message);
+    } finally {
+      setBusy("");
+    }
   };
 
   const toggleStatus = async () => {
