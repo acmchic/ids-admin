@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { toast } from "react-toastify";
 
 export type CampaignLink = {
@@ -39,7 +39,15 @@ export type BatchCheckResult = {
   checked_at: string;
   broken_links: { url: string; label: string; status: number | null; required: boolean; count: number }[];
   blocked_recipients: { email: string; reason: string }[];
-  recipients: { email: string; name: string | null; products: number; dropped: number; blocked: boolean }[];
+  recipients: {
+    email: string;
+    name: string | null;
+    last_order_at?: string | null;
+    products: number;
+    dropped: number;
+    blocked: boolean;
+    links?: (CampaignLink & { image_url?: string | null })[];
+  }[];
 };
 
 type Props = {
@@ -260,6 +268,33 @@ export default function CampaignPreviewPanel({
     }
   };
 
+  const inList = (address: string) =>
+    Boolean(batch?.recipients.some((recipient) => recipient.email.toLowerCase() === address.toLowerCase()));
+
+  const previewBlock = (result: PreviewResult) => (
+    <div className="mb-4">
+      {(result.blocked || result.mailing_address_missing || result.products_dropped > 0) && (
+        <div className="p-3 mb-3 rounded-lg bg-yellow-50 text-yellow-800 text-xs space-y-1">
+          {result.blocked && <p className="text-red-700 font-semibold">⛔ Will not be sent: {result.block_reason}</p>}
+          {result.products_dropped > 0 && <p>{result.products_dropped} past product(s) removed (page does not open).</p>}
+          {result.mailing_address_missing && <p>EMAIL_MAILING_ADDRESS is not set (required in the footer by US law).</p>}
+        </div>
+      )}
+      <p className="text-xs text-gray-600 mb-3">
+        <strong>Subject:</strong> {result.subject} · <strong>To:</strong> {result.email}
+        {result.country_code ? ` (${result.country_code})` : ""}
+      </p>
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+        <div className="lg:col-span-3">
+          <EmailFrame html={result.html} />
+        </div>
+        <div className="lg:col-span-2">
+          <LinkTable links={result.links} />
+        </div>
+      </div>
+    </div>
+  );
+
   const button = "px-4 py-2 rounded-lg text-sm font-bold disabled:opacity-50 whitespace-nowrap";
 
   return (
@@ -318,28 +353,88 @@ export default function CampaignPreviewPanel({
         </button>
       </div>
 
-      {preview && (
-        <>
-          {(preview.blocked || preview.mailing_address_missing || preview.products_dropped > 0) && (
-            <div className="p-3 mb-3 rounded-lg bg-yellow-50 text-yellow-800 text-xs space-y-1">
-              {preview.blocked && <p className="text-red-700 font-semibold">⛔ Will not be sent: {preview.block_reason}</p>}
-              {preview.products_dropped > 0 && <p>{preview.products_dropped} past product(s) removed (page does not open).</p>}
-              {preview.mailing_address_missing && <p>EMAIL_MAILING_ADDRESS is not set (required in the footer by US law).</p>}
-            </div>
-          )}
-          <p className="text-xs text-gray-600 mb-3">
-            <strong>Subject:</strong> {preview.subject} · <strong>To:</strong> {preview.email}
-            {preview.country_code ? ` (${preview.country_code})` : ""}
-          </p>
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-3">
-              <EmailFrame html={preview.html} />
-            </div>
-            <div className="lg:col-span-2">
-              <LinkTable links={preview.links} />
-            </div>
-          </div>
-        </>
+      {preview && !inList(preview.email) && previewBlock(preview)}
+
+      {batch && batch.recipients.length > 0 && (
+        <div className="border rounded-lg overflow-hidden">
+          <table className="w-full text-xs">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="text-left p-2 w-10">#</th>
+                <th className="text-left p-2">Customer</th>
+                <th className="text-left p-2">Products in email (click to open)</th>
+                <th className="text-left p-2">Customize</th>
+                <th className="p-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {batch.recipients.map((recipient, index) => {
+                const products = (recipient.links || []).filter((link) => link.key.startsWith("reorder"));
+                const customize = (recipient.links || []).find((link) => link.key === "customize");
+                const open = preview?.email === recipient.email.toLowerCase();
+                return (
+                  <Fragment key={recipient.email}>
+                    <tr className={`border-t align-top ${recipient.blocked ? "bg-red-50" : open ? "bg-blue-50" : ""}`}>
+                      <td className="p-2 text-gray-500">{index + 1}</td>
+                      <td className="p-2">
+                        <p className="font-semibold text-gray-800">{recipient.name || "-"}</p>
+                        <p className="font-mono text-gray-500">{recipient.email}</p>
+                        {recipient.last_order_at && <p className="text-gray-400">Last order {recipient.last_order_at}</p>}
+                      </td>
+                      <td className="p-2">
+                        {products.length === 0 && <span className="text-gray-400">No past products (customize only)</span>}
+                        <div className="flex flex-wrap gap-2">
+                          {products.map((link, i) => (
+                            <a
+                              key={i}
+                              href={link.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              title={`${link.label}${link.ok ? "" : ` — removed (${link.status ?? "no response"})`}`}
+                              className={`block w-16 text-center ${link.ok ? "" : "opacity-40"}`}
+                            >
+                              {link.image_url ? (
+                                <img src={link.image_url} alt="" loading="lazy" className={`w-16 h-16 object-cover rounded border ${link.ok ? "" : "border-red-500"}`} />
+                              ) : (
+                                <div className="w-16 h-16 rounded border bg-gray-100" />
+                              )}
+                              <span className={`block truncate ${link.ok ? "text-blue-600" : "text-red-600 line-through"}`}>
+                                {link.label.replace(/^Reorder: /, "")}
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        {customize && (
+                          <a href={customize.url} target="_blank" rel="noreferrer" className={customize.ok ? "text-blue-600 underline" : "text-red-600 font-bold"}>
+                            {customize.ok ? "Open ↗" : `Broken (${customize.status ?? "no response"})`}
+                          </a>
+                        )}
+                      </td>
+                      <td className="p-2 text-right">
+                        <button
+                          onClick={() => (open ? setPreview(null) : runPreview(recipient.email))}
+                          disabled={!!busy}
+                          className="px-3 py-1 bg-blue-50 text-blue-700 rounded hover:bg-blue-100 font-semibold disabled:opacity-50"
+                        >
+                          {busy === "preview" && email === recipient.email ? "..." : open ? "Hide" : "Preview"}
+                        </button>
+                      </td>
+                    </tr>
+                    {open && preview && (
+                      <tr>
+                        <td colSpan={5} className="p-3 bg-gray-50">
+                          {previewBlock(preview)}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
