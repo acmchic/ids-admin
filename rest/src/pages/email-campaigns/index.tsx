@@ -24,6 +24,8 @@ type Campaign = {
   total_clicks: number;
   attributed_orders: number;
   attributed_revenue: number;
+  coupon_orders?: number;
+  coupon_revenue?: number;
   batch_size: number;
   started_at: string | null;
   completed_at: string | null;
@@ -51,6 +53,10 @@ type CampaignDetail = {
     clicks: number;
     uniqueClicks: number;
   }[];
+  // Season campaign extras (absent until the orders migration is applied).
+  segments?: { segment: string; total: number; pending: number; sent: number; opened: number; clicked: number; orders: number }[];
+  variants?: { variant: string; sent: number; opened: number; clicked: number; orders: number }[];
+  couponOrders?: { orders: number; revenue: number };
 };
 
 type OverviewData = {
@@ -179,6 +185,8 @@ export default function EmailCampaigns() {
   const [showSendConfirm, setShowSendConfirm] = useState(false);
   const [batchCheck, setBatchCheck] = useState<BatchCheckResult | null>(null);
   const [snapshotRecipientId, setSnapshotRecipientId] = useState<number | null>(null);
+  // Season sale tools: raw artisan output of the preflight / audience preview.
+  const [toolOutput, setToolOutput] = useState<string | null>(null);
 
   const fetchCampaigns = useCallback(async () => {
     try {
@@ -197,6 +205,8 @@ export default function EmailCampaigns() {
     try {
       setActionLoading(true);
       if (action === 'dry-run' || action === 'repeat-preview') setDryRunData(null);
+      const isSeasonTool = ['preflight', 'season-preview'].includes(action);
+      if (isSeasonTool) setToolOutput(null);
       
       const res = await fetch("/api/email-campaigns/action", {
         method: "POST",
@@ -204,10 +214,10 @@ export default function EmailCampaigns() {
         body: JSON.stringify({
           id,
           action,
-          limit: action === 'extract' ? extractLimit : undefined,
           batchSize: action === 'send' ? selectedPendingCount : undefined,
           email: action === 'test' ? testEmail : undefined,
           previewAs: action === 'test' ? previewAsEmail : undefined,
+          limit: action === 'extract' ? extractLimit : undefined,
         }),
       });
       const result = await res.json();
@@ -219,6 +229,8 @@ export default function EmailCampaigns() {
             .filter((l: string) => l.includes("→"))
             .map((l: string) => l.replace("→", "").trim());
           setDryRunData(lines);
+        } else if (isSeasonTool) {
+          setToolOutput(result.output || "(no output)");
         } else {
           toast.success(result.message || `Action ${action} successful`);
           if (selectedCampaign) fetchDetail(id);
@@ -588,7 +600,12 @@ export default function EmailCampaigns() {
                               <span className="block text-[10px] font-normal text-gray-400">{campaign.total_clicks.toLocaleString()} total</span>
                             )}
                           </td>
-                          <td className="p-3 text-right font-mono font-semibold">{campaign.attributed_orders.toLocaleString()}</td>
+                          <td className="p-3 text-right font-mono font-semibold">
+                            {campaign.attributed_orders.toLocaleString()}
+                            {(campaign.coupon_orders || 0) > 0 && (
+                              <span className="block text-[10px] font-normal text-gray-400" title="Orders that used this campaign's coupon code since it started">+{campaign.coupon_orders} via coupon</span>
+                            )}
+                          </td>
                           <td className="p-3 text-right font-mono text-green-700 font-semibold">
                             ${campaign.attributed_revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </td>
@@ -672,8 +689,90 @@ export default function EmailCampaigns() {
                 onStatusChanged={() => { fetchDetail(selectedCampaign.campaign.id, true); fetchCampaigns(); }}
               />
 
-              {/* Old manual flow; the comeback campaign enrolls and sends automatically. */}
-              {selectedCampaign.campaign.template !== "comeback" && (
+              {/* Season sale tools */}
+              {selectedCampaign.campaign.template === "holiday" && (
+              <div className="bg-white border-2 border-green-100 rounded-xl p-5 mb-6 shadow-sm">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xl">🎄</span>
+                  <h3 className="text-base font-extrabold text-gray-800">Season sale: audience &amp; results</h3>
+                </div>
+                <p className="text-xs text-gray-500 mb-4">
+                  Recipients are enrolled daily by campaign:season, ranked hot, vip, engaged, warm, so the quota reaches the best prospects first. Run the preflight before enabling sending (EMAIL_SEASON_ENABLED); nothing here sends email.
+                </p>
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <button onClick={() => runAction(selectedCampaign.campaign.id, 'preflight')} disabled={actionLoading}
+                    className="px-4 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 transition text-sm font-bold disabled:opacity-50">
+                    {actionLoading ? "..." : "Run preflight"}
+                  </button>
+                  <button onClick={() => runAction(selectedCampaign.campaign.id, 'season-preview')} disabled={actionLoading}
+                    className="px-4 py-2 bg-gray-100 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-200 transition text-sm font-bold disabled:opacity-50">
+                    Preview audience &amp; timing
+                  </button>
+                </div>
+                {toolOutput && (
+                  <pre className="mb-4 bg-gray-900 text-green-400 p-3 rounded-lg text-[11px] font-mono max-h-72 overflow-auto border border-gray-700 whitespace-pre-wrap">{toolOutput}</pre>
+                )}
+                {selectedCampaign.segments && selectedCampaign.segments.length > 0 && (
+                  <div className="overflow-x-auto mb-4">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50"><tr>
+                        <th className="text-left p-2">Segment</th><th className="text-right p-2">Total</th><th className="text-right p-2">Pending</th>
+                        <th className="text-right p-2">Sent</th><th className="text-right p-2">Opened</th><th className="text-right p-2">Clicked</th>
+                        <th className="text-right p-2">Click rate</th><th className="text-right p-2">Orders</th>
+                      </tr></thead>
+                      <tbody>
+                        {selectedCampaign.segments.map((row) => (
+                          <tr key={row.segment} className="border-b">
+                            <td className="p-2 font-semibold capitalize">{row.segment}</td>
+                            <td className="p-2 text-right font-mono">{row.total.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.pending.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.sent.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.opened.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.clicked.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.sent > 0 ? `${((row.clicked / row.sent) * 100).toFixed(1)}%` : "-"}</td>
+                            <td className="p-2 text-right font-mono">{row.orders.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {selectedCampaign.variants && selectedCampaign.variants.length > 0 && (
+                  <div className="overflow-x-auto mb-4">
+                    <p className="text-xs font-bold text-gray-600 mb-1">Subject A/B (compare clicks and orders; opens are inflated by mail privacy features)</p>
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50"><tr>
+                        <th className="text-left p-2">Arm</th><th className="text-right p-2">Sent</th><th className="text-right p-2">Opened</th>
+                        <th className="text-right p-2">Clicked</th><th className="text-right p-2">Click rate</th><th className="text-right p-2">Orders</th>
+                      </tr></thead>
+                      <tbody>
+                        {selectedCampaign.variants.map((row) => (
+                          <tr key={row.variant} className="border-b">
+                            <td className="p-2 font-semibold">{row.variant}</td>
+                            <td className="p-2 text-right font-mono">{row.sent.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.opened.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.clicked.toLocaleString()}</td>
+                            <td className="p-2 text-right font-mono">{row.sent > 0 ? `${((row.clicked / row.sent) * 100).toFixed(1)}%` : "-"}</td>
+                            <td className="p-2 text-right font-mono">{row.orders.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {selectedCampaign.campaign.discount_code && selectedCampaign.couponOrders && (
+                  <p className="text-xs text-gray-600">
+                    Orders using code <strong className="font-mono">{selectedCampaign.campaign.discount_code}</strong> since the campaign started:{" "}
+                    <strong>{selectedCampaign.couponOrders.orders.toLocaleString()}</strong> ($
+                    {selectedCampaign.couponOrders.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}).
+                    This also counts shoppers whose click was not tracked.
+                  </p>
+                )}
+              </div>
+              )}
+
+              {/* Old manual flow; comeback and season campaigns enroll and send automatically. */}
+              {!["comeback", "holiday"].includes(selectedCampaign.campaign.template || "") && (
                 <>
               {/* Action Buttons */}
               <div className="bg-white border-2 border-orange-100 rounded-xl p-5 mb-6 shadow-sm">

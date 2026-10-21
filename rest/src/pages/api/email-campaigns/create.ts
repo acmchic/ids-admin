@@ -9,10 +9,15 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
-    const { name, subject, discountCode, discountPercent, ctaUrl, ctaText } = req.body;
+    const { name, subject, discountCode, discountPercent, ctaUrl, ctaText, previewText, heading } = req.body;
 
     if (!name || !subject) {
       return res.status(400).json({ message: 'Name and Subject are required' });
+    }
+
+    const percent = discountPercent ? parseInt(discountPercent) : null;
+    if (percent !== null && (isNaN(percent) || percent < 1 || percent > 90)) {
+      return res.status(400).json({ message: 'Discount percent must be between 1 and 90' });
     }
 
     const campaign = await prisma.email_campaigns.create({
@@ -20,12 +25,13 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         name,
         subject,
         discount_code: discountCode || null,
-        discount_percent: discountPercent ? parseInt(discountPercent) : null,
+        discount_percent: percent,
         cta_url: ctaUrl || 'https://idreamshirt.com/products/customize/premium-t-shirt',
-        cta_text: ctaText || (discountPercent ? `Get ${parseInt(discountPercent)}% Off Now` : 'Start Your Custom Shirt'),
+        cta_text: ctaText || (percent ? `Get ${percent}% Off Now` : 'Start Your Custom Shirt'),
         status: 'draft',
-        preview_text: `30% OFF - Custom Design Service`,
-        heading: 'Your Imagination,<br>Our Creation',
+        // The preview text must match the real offer; it used to be a fixed "30% OFF".
+        preview_text: previewText || (percent ? `${percent}% OFF - Custom Design Service` : 'Custom Design Service'),
+        heading: heading || 'Your Imagination,<br>Our Creation',
         batch_size: 50,
       },
     });

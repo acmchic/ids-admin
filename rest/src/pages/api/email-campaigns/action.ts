@@ -57,10 +57,10 @@ export default async function handler(
   // (US buyers only, newest first, warm-up); manual extract/dispatch would bypass that.
   if (["extract", "send", "dry-run", "repeat-preview"].includes(action)) {
     const rows: any[] = await prisma.$queryRaw`SELECT template FROM email_campaigns WHERE id = ${campaignId}`;
-    if (rows[0]?.template === "comeback") {
+    if (rows[0]?.template === "comeback" || rows[0]?.template === "holiday") {
       return res.status(400).json({
         error: "This campaign sends automatically every day",
-        details: "Use Preview email / Check next batch. Recipients are added by the daily campaign:comeback job.",
+        details: `Use Preview email / Check next batch. Recipients are added by the daily ${rows[0].template === "holiday" ? "campaign:season" : "campaign:comeback"} job.`,
       });
     }
   }
@@ -148,6 +148,12 @@ export default async function handler(
   } else if (action === "dry-run") {
     args.push("campaign:send-batch", String(campaignId), "--dry-run");
     if (safeBatchSize) args.push(`--batch-size=${safeBatchSize}`);
+  } else if (action === "season-preview") {
+    // Ranked audience, segments and timing for the season campaign. Read-only (--dry-run).
+    args.push("campaign:season", `--campaign=${campaignId}`, "--dry-run");
+  } else if (action === "preflight") {
+    // Read-only launch checklist (coupon, tracking routes, quota, audience).
+    args.push("campaign:season-preflight");
   } else if (action === "repeat-preview") {
     args.push(
       "campaign:extract-emails", String(campaignId), "--completed",
@@ -161,6 +167,10 @@ export default async function handler(
   console.log("Executing campaign action", { action, campaignId, testMode });
 
   execFile("php", args, { timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+    // Preflight exits 1 when a check fails; the checklist itself is the answer, so return it.
+    if (error && action === "preflight" && stdout) {
+      return res.status(200).json({ message: "Preflight found problems", output: stdout, passed: false, testMode });
+    }
     if (error) {
       console.error("Campaign action failed", { action, campaignId, message: error.message });
       return res.status(500).json({

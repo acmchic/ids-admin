@@ -46,6 +46,16 @@ export default async function handler(
 
       const campaign = campaigns[0];
 
+      // Season columns exist only after the additive orders migration; stay compatible without it.
+      const seasonColumns: any[] = await prisma.$queryRaw`
+        SELECT COLUMN_NAME AS name FROM information_schema.COLUMNS
+        WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'email_campaign_recipients'
+          AND COLUMN_NAME IN ('segment', 'priority', 'variant')
+      `;
+      const hasSeason = seasonColumns.length === 3;
+      const seasonSelect = hasSeason ? Prisma.sql`, r.segment, r.priority, r.variant` : Prisma.empty;
+      const seasonOrder = hasSeason ? Prisma.sql`r.priority ASC,` : Prisma.empty;
+
       // Get recipient breakdown
       const stats: any[] = await prisma.$queryRaw`
         SELECT 
@@ -58,7 +68,7 @@ export default async function handler(
 
       // Get recent recipients (last 50)
       const recentRecipients: any[] = await prisma.$queryRaw`
-        SELECT r.id, r.email, r.name, r.status, r.error_message, r.sent_at, r.opened_at, r.clicked_at, r.click_count,
+        SELECT r.id, r.email, r.name, r.status, r.error_message, r.sent_at, r.opened_at, r.clicked_at, r.click_count${seasonSelect},
                (r.rendered_html IS NOT NULL OR r.links IS NOT NULL) AS has_snapshot,
                c.last_order_at,
                CASE WHEN c.last_order_at IS NULL THEN NULL ELSE DATEDIFF(CURRENT_DATE, DATE(c.last_order_at)) END AS days_since_last_order
@@ -71,16 +81,17 @@ export default async function handler(
             WHEN 'failed' THEN 1
             WHEN 'sent' THEN 2
           END,
+          ${seasonOrder}
           c.last_order_at DESC, r.email ASC, r.id ASC
         LIMIT 100
       `;
 
       const nextRecipients: any[] = await prisma.$queryRaw`
-        SELECT r.id, r.email, r.name, c.last_order_at
+        SELECT r.id, r.email, r.name, c.last_order_at${seasonSelect}
         FROM email_campaign_recipients r
         LEFT JOIN (${completedPurchases}) c ON c.email = LOWER(TRIM(r.email))
         WHERE r.campaign_id = ${campaignId} AND r.status = 'pending'
-        ORDER BY c.last_order_at DESC, r.email ASC, r.id ASC
+        ORDER BY ${seasonOrder} c.last_order_at DESC, r.email ASC, r.id ASC
         LIMIT 50
       `;
 
@@ -122,6 +133,55 @@ export default async function handler(
         ORDER BY clicks DESC
       `;
 
+      // Segment funnel, subject A/B arms and coupon redemptions (season campaigns).
+      let segments: any[] = [];
+      let variants: any[] = [];
+      if (hasSeason) {
+        segments = await prisma.$queryRaw`
+          SELECT COALESCE(r.segment, '-') AS segment,
+                 CAST(COUNT(*) AS UNSIGNED) AS total,
+                 CAST(SUM(r.status = 'pending') AS UNSIGNED) AS pending,
+                 CAST(SUM(r.status IN ('sent', 'opened')) AS UNSIGNED) AS sent,
+                 CAST(SUM(r.opened_at IS NOT NULL) AS UNSIGNED) AS opened,
+                 CAST(SUM(r.clicked_at IS NOT NULL) AS UNSIGNED) AS clicked,
+                 CAST(COUNT(DISTINCT o.id) AS UNSIGNED) AS orders
+          FROM email_campaign_recipients r
+          LEFT JOIN orders o ON o.email_recipient_id = r.id AND o.payment_status = 'COMPLETED' AND o.deleted_at IS NULL
+          WHERE r.campaign_id = ${campaignId}
+          GROUP BY COALESCE(r.segment, '-')
+          ORDER BY MIN(r.priority) ASC
+        `;
+        variants = await prisma.$queryRaw`
+          SELECT r.variant AS variant,
+                 CAST(COUNT(*) AS UNSIGNED) AS sent,
+                 CAST(SUM(r.opened_at IS NOT NULL) AS UNSIGNED) AS opened,
+                 CAST(SUM(r.clicked_at IS NOT NULL) AS UNSIGNED) AS clicked,
+                 CAST(COUNT(DISTINCT o.id) AS UNSIGNED) AS orders
+          FROM email_campaign_recipients r
+          LEFT JOIN orders o ON o.email_recipient_id = r.id AND o.payment_status = 'COMPLETED' AND o.deleted_at IS NULL
+          WHERE r.campaign_id = ${campaignId} AND r.variant IS NOT NULL
+          GROUP BY r.variant
+          ORDER BY r.variant ASC
+        `;
+      }
+      // Orders that used the campaign coupon since it started: a second signal when click
+      // attribution misses (other device, link opened from a forwarded email).
+      let couponOrders = { orders: 0, revenue: 0 };
+      if (campaign.discount_code) {
+        try {
+          const rows: any[] = await prisma.$queryRaw`
+            SELECT COUNT(*) AS orders, COALESCE(SUM(paid_total), 0) AS revenue
+            FROM orders
+            WHERE payment_status = 'COMPLETED' AND deleted_at IS NULL
+              AND LOWER(coupon_code) = LOWER(${campaign.discount_code})
+              AND created_at >= ${campaign.started_at || campaign.created_at}
+          `;
+          couponOrders = { orders: Number(rows[0]?.orders || 0), revenue: Number(rows[0]?.revenue || 0) };
+        } catch (couponError: any) {
+          console.warn("Coupon order lookup unavailable:", couponError.message);
+        }
+      }
+
       const safeStats = stats.map((s: any) => ({
         status: s.status,
         count: Number(s.count),
@@ -149,6 +209,9 @@ export default async function handler(
           batch_size: Number(campaign.batch_size),
         },
         stats: safeStats,
+        segments,
+        variants,
+        couponOrders,
         recentRecipients: safeRecipients,
         nextRecipients,
         failedRecipients: safeFailedRecipients,

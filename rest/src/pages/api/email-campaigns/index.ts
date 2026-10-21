@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from "next";
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -13,8 +13,12 @@ export default async function handler(
 
   if (req.method === "GET") {
     try {
-      // Get all campaigns with stats
-      const campaigns: any[] = await prisma.$queryRaw`
+      // Get all campaigns with stats. Coupon redemptions are a second attribution signal;
+      // if the orders table lacks the column the list still works without it.
+      const couponColumns = Prisma.sql`,
+          (SELECT COUNT(*) FROM orders WHERE ec.discount_code IS NOT NULL AND LOWER(coupon_code) = LOWER(ec.discount_code) AND payment_status = 'COMPLETED' AND deleted_at IS NULL AND created_at >= COALESCE(ec.started_at, ec.created_at)) as coupon_orders,
+          (SELECT COALESCE(SUM(paid_total), 0) FROM orders WHERE ec.discount_code IS NOT NULL AND LOWER(coupon_code) = LOWER(ec.discount_code) AND payment_status = 'COMPLETED' AND deleted_at IS NULL AND created_at >= COALESCE(ec.started_at, ec.created_at)) as coupon_revenue`;
+      const listCampaigns = (extra: any) => prisma.$queryRaw`
         SELECT 
           ec.*,
           (SELECT COUNT(*) FROM email_campaign_recipients WHERE campaign_id = ec.id) as total_recipients,
@@ -25,10 +29,17 @@ export default async function handler(
           (SELECT COUNT(*) FROM email_campaign_recipients WHERE campaign_id = ec.id AND clicked_at IS NOT NULL) as clicked_count,
           (SELECT COUNT(*) FROM email_campaign_clicks WHERE campaign_id = ec.id) as total_clicks,
           (SELECT COUNT(*) FROM orders WHERE email_campaign_id = ec.id AND payment_status = 'COMPLETED' AND deleted_at IS NULL) as attributed_orders,
-          (SELECT COALESCE(SUM(paid_total), 0) FROM orders WHERE email_campaign_id = ec.id AND payment_status = 'COMPLETED' AND deleted_at IS NULL) as attributed_revenue
+          (SELECT COALESCE(SUM(paid_total), 0) FROM orders WHERE email_campaign_id = ec.id AND payment_status = 'COMPLETED' AND deleted_at IS NULL) as attributed_revenue${extra}
         FROM email_campaigns ec
         ORDER BY ec.created_at DESC
       `;
+      let campaigns: any[];
+      try {
+        campaigns = await listCampaigns(couponColumns);
+      } catch (couponError: any) {
+        console.warn("Campaign list without coupon columns:", couponError.message);
+        campaigns = await listCampaigns(Prisma.empty);
+      }
 
       // Get unsubscribe count
       const unsubscribeResult: any[] = await prisma.$queryRaw`
@@ -58,6 +69,8 @@ export default async function handler(
         total_clicks: Number(c.total_clicks),
         attributed_orders: Number(c.attributed_orders),
         attributed_revenue: Number(c.attributed_revenue),
+        coupon_orders: Number(c.coupon_orders || 0),
+        coupon_revenue: Number(c.coupon_revenue || 0),
       }));
 
       return res.status(200).json({
