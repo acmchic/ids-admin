@@ -4,6 +4,7 @@ import os from "os";
 import { PrismaClient } from "@prisma/client";
 import fs from "fs";
 import path from "path";
+import { campaignArtisanCommand } from "../../../utils/campaign-artisan";
 
 const prisma = new PrismaClient();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -74,33 +75,30 @@ export default async function handler(
     return res.status(200).json({ message: action === "pause" ? "Campaign paused" : "Campaign resumed" });
   }
 
-  let artisanPath = "";
-  try {
-    artisanPath = resolveArtisanPath();
-  } catch (error: any) {
-    return res.status(500).json({ error: "Failed to locate Laravel artisan", details: error.message });
-  }
-
   // Read-only JSON actions used by the admin preview panel.
   if (action === "preview") {
     const email = String(req.body.email || "").trim().toLowerCase();
     if (!EMAIL_PATTERN.test(email)) {
       return res.status(400).json({ error: "Enter a valid customer email to preview" });
     }
-    return runJson(res, [artisanPath, "campaign:preview", String(campaignId), email, "--json"], 120000);
+    return runJson(res, ["campaign:preview", String(campaignId), email, "--json"], 120000);
   }
 
   // Checking 300 emails takes minutes, longer than Cloudflare (100s) and nginx (60s)
   // allow for one request, so it runs in the background and the page polls for the result.
   if (action === "check-batch") {
-    return res.status(202).json(startBatchCheck(artisanPath, campaignId, safeLimit ?? 300));
+    try {
+      return res.status(202).json(startBatchCheck(resolveArtisanPath(), campaignId, safeLimit ?? 300));
+    } catch (error: any) {
+      return res.status(500).json({ error: "Failed to start batch check", details: error.message });
+    }
   }
 
   if (action === "check-batch-status") {
     return res.status(200).json(batchCheckStatus(campaignId));
   }
 
-  const args = [artisanPath];
+  const args: string[] = [];
   if (action === "extract") {
     args.push("campaign:extract-emails", String(campaignId), "--completed");
     if (safeLimit) args.push(`--limit=${safeLimit}`);
@@ -113,7 +111,7 @@ export default async function handler(
     }
     // Never dispatch a batch that would send customers to a broken page.
     const check = await execJson([
-      artisanPath, "campaign:check-batch", String(campaignId), `--limit=${Math.min(safeBatchSize ?? 300, 1000)}`, "--json",
+      "campaign:check-batch", String(campaignId), `--limit=${Math.min(safeBatchSize ?? 300, 1000)}`, "--json",
     ], 600000).catch((error: Error) => ({ error: error.message }));
     if ((check as any).error) {
       return res.status(500).json({ error: "Link check failed, nothing was sent", details: (check as any).error });
@@ -166,7 +164,13 @@ export default async function handler(
 
   console.log("Executing campaign action", { action, campaignId, testMode });
 
-  execFile("php", args, { timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+  let command;
+  try {
+    command = campaignArtisanCommand(args);
+  } catch (error: any) {
+    return res.status(500).json({ error: "Failed to locate Laravel artisan", details: error.message });
+  }
+  execFile(command.file, command.args, { timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
     // Preflight exits 1 when a check fails; the checklist itself is the answer, so return it.
     if (error && action === "preflight" && stdout) {
       return res.status(200).json({ message: "Preflight found problems", output: stdout, passed: false, testMode });
@@ -276,7 +280,8 @@ function batchCheckStatus(campaignId: number) {
 
 function execJson(args: string[], timeout: number): Promise<any> {
   return new Promise((resolve, reject) => {
-    execFile("php", args, { timeout, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const command = campaignArtisanCommand(args);
+    execFile(command.file, command.args, { timeout, maxBuffer: 32 * 1024 * 1024 }, (error, stdout, stderr) => {
       let parsed: any = null;
       try {
         parsed = JSON.parse(stdout);
@@ -301,7 +306,7 @@ async function runJson(res: NextApiResponse, args: string[], timeout: number) {
     }
     return res.status(200).json(result);
   } catch (error: any) {
-    console.error("Campaign JSON action failed", { command: args[1], message: error.message });
+    console.error("Campaign JSON action failed", { command: args[0], message: error.message });
     return res.status(500).json({ error: "Failed to execute command", details: error.message });
   }
 }
