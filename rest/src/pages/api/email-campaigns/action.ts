@@ -1,7 +1,6 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { execFile } from "child_process";
-import fs from "fs";
-import path from "path";
+import { campaignArtisanCommand } from "../../../utils/campaign-artisan";
 
 const testMode = process.env.EMAIL_CAMPAIGN_TEST_MODE !== "false";
 const allowedRecipients = (process.env.EMAIL_CAMPAIGN_TEST_RECIPIENTS || "acmchic88@gmail.com")
@@ -48,14 +47,7 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid batch size" });
   }
 
-  let artisanPath = "";
-  try {
-    artisanPath = resolveArtisanPath();
-  } catch (error: any) {
-    return res.status(500).json({ error: "Failed to locate Laravel artisan", details: error.message });
-  }
-
-  const args = [artisanPath];
+  const args: string[] = [];
   if (action === "extract") {
     args.push("campaign:extract-emails", String(campaignId), "--completed");
     if (safeLimit) args.push(`--limit=${safeLimit}`);
@@ -98,9 +90,19 @@ export default async function handler(
     return res.status(400).json({ error: "Invalid action" });
   }
 
+  let command;
+  try {
+    command = campaignArtisanCommand(args);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to locate Laravel artisan",
+      details: error instanceof Error ? error.message : String(error),
+    });
+  }
+
   console.log("Executing campaign action", { action, campaignId, testMode });
 
-  execFile("php", args, { timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
+  execFile(command.file, command.args, { timeout: 120000, maxBuffer: 2 * 1024 * 1024 }, (error, stdout, stderr) => {
     if (error) {
       console.error("Campaign action failed", { action, campaignId, message: error.message });
       return res.status(500).json({
@@ -116,21 +118,4 @@ export default async function handler(
       testMode,
     });
   });
-}
-
-function resolveArtisanPath() {
-  const candidates = [
-    process.env.CAMPAIGN_ARTISAN_PATH,
-    path.resolve(process.cwd(), "..", "..", "order", "artisan"),
-    path.resolve(process.cwd(), "..", "..", "orders", "artisan"),
-    "/home/production/order/artisan",
-    "/home/production/orders/artisan",
-  ].filter(Boolean) as string[];
-
-  const artisanPath = candidates.find((candidate) => fs.existsSync(candidate));
-  if (!artisanPath) {
-    throw new Error(`Unable to locate Laravel artisan. Tried: ${candidates.join(", ")}`);
-  }
-
-  return artisanPath;
 }
